@@ -1,0 +1,393 @@
+#!/bin/env expect -f
+
+# debug is on if set to 1
+exp_internal 0;
+stty -echo;
+
+set ERROR_CONNECTION_TIMEOUT 64;
+set ERROR_CONNECTION_FAILED 65;
+set ERROR_DNS_RESOLUTION_FAILED 66;
+set ERROR_AUTHENTICATION_FAILED 67;
+set ERROR_HOSTNAME_DETECTION_FAILED 68;
+set ERROR_PROMPT_DETECTION_FAILED 69;
+set ERROR_PAGING_OFF_FAILED 70;
+set ERROR_INPUT 71;
+set ERROR_SCRIPTING_ON_FAILED 72;
+set ERROR_TERMINATED_NO_SPAWN 73;
+set ERROR_UNKNOWN_SSH_FINGERPRINT 74;
+
+set host "{{ host }}";
+set controller "{{ controller }}";
+set plugin "{{ plugin }}";
+set host_operating_system "{{ operating_system }}";
+set transaction_id "{{ uid }}";
+set username "";
+set password "";
+set password_enable "";
+set connection_string "{{ connection_string }}";
+set session_authenticated 0;
+set session_authentication_failed 0;
+set paging_mode_on {{ paging_mode_on }};
+set paging_mode_cli "{{ paging_mode_cli }}";
+set scripting_mode_on {{ scripting_mode_on }};
+set scripting_mode_cli "{{ scripting_mode_cli }}";
+set session_dir "{{ log_dir }}";
+set session_log_file "{{ log_file_name }}";
+set session_log [open "$session_log_file" "a"];
+set on_prompt "{{ on_prompt }}"
+
+set session_pid 1111111;
+
+log_file "{{ dbg_file_name }}";
+log_user 0;
+
+proc session_terminate_handler {} {
+  global session_pid;
+  global session_log;
+  global transaction_id;
+  global ERROR_TERMINATED_NO_SPAWN;
+  if {$session_pid == 1111111} {
+    puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='received term/int signal but no spawned processes found' rc=$ERROR_TERMINATED_NO_SPAWN";
+  } else {
+    close $session_pid;
+    puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='received term/int signal and closed PID $session_pid' rc=0";
+    exit 0;
+  }
+}
+
+trap session_terminate_handler {SIGINT SIGTERM};
+
+proc get_credentials {tp} {
+  global username;
+  global password;
+  global password_enable;
+  global ERROR_INPUT;
+  global session_log;
+  global transaction_id;
+  stty -echo;
+  puts stdout "$tp:";
+  expect_user {
+    -re "(.*)\n" {
+      switch -glob -- $tp {
+        "username" {
+          set username $expect_out(1,string);
+          puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='user sent username: $username'";
+        }
+        "password" {
+          set password $expect_out(1,string);
+        }
+        "password_enable" {
+          set password_enable $expect_out(1,string);
+        }
+        default {
+          puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='user failed to provide: $tp' rc=$ERROR_INPUT";
+          exit $ERROR_INPUT;
+        }
+      }
+    }
+    timeout {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='user failed to provide: $tp' rc=$ERROR_INPUT";
+      exit $ERROR_INPUT;
+    }
+    eof {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='user failed to provide: $tp' rc=$ERROR_INPUT";
+      exit $ERROR_INPUT;
+    }
+    default {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='user failed to provide: $tp' rc=$ERROR_INPUT";
+      exit $ERROR_INPUT;
+    }
+  }
+  send_user "\n";
+}
+
+
+proc get_cli_task {item} {
+  global ERROR_INPUT;
+  global session_log;
+  global transaction_id;
+  stty -echo;
+  puts stdout "$item:";
+  expect_user {
+    -re "(.*)\n" {
+      set uitem $expect_out(1,string);
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='received $item: $uitem'";
+      set item $uitem;
+    }
+    default {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='user failed to provide $item' rc=$ERROR_INPUT";
+      exit $ERROR_INPUT;
+    }
+  }
+  send_user "\n";
+  return $item;
+}
+
+proc parse_cli {cli_output} {
+  set cli_output_char_arr [split $cli_output ""];
+  set cli_output "";
+  foreach cli_char $cli_output_char_arr {
+    if {$cli_char == "\[" || $cli_char == "\]"} {
+      append cli_output $cli_char;
+    } else {
+      set filtered_chars {[\u0000-\u0009\u000b-\u000d\u000e-\u001f\u007f-\uffff]};
+      set newline_chars {[\u000a]};
+      set filtered_cli_output [subst [regsub -all $filtered_chars $cli_char ""]];
+      set newlined_cli_output [subst [regsub -all $newline_chars $filtered_cli_output "\n"]];
+      append cli_output $newlined_cli_output;
+    }
+  }
+  return $cli_output;
+}
+
+proc parse_cli_prompt {cli_output req} {
+  set newline_chars {[\u000a]};
+  set lines [split $cli_output "\n"];
+  set filtered_cli_output [lindex $lines end];
+  set cli_output [parse_cli "$filtered_cli_output"];
+  if { [string compare $req "hostname"] == 0 } {
+     set prompt_chars {[\u0023\u003e\u0020]};
+     set filtered_cli_output [subst [regsub $prompt_chars $cli_output ""]];
+     return $filtered_cli_output;
+  }
+  return $cli_output;
+}
+
+proc get_optional_prompt {prompt} {
+  set prompt_end [string index $prompt end];
+  set prompt_start [string trim $prompt $prompt_end];
+  set prompt_vars "(\\S+)";
+  return $prompt_start$prompt_vars$prompt_end;
+}
+
+get_credentials "username";
+puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' controller='$controller'\
+         host='$host' operating_system='$host_operating_system' tool='ansible'\
+         plugin='$plugin' user='$username' action='init'";
+get_credentials "password";
+get_credentials "password_enable";
+
+set send_human {.1 .3 1 .05 2};
+set timeout 30;
+set now [clock format [clock seconds] -format "%Y%m%d.%H%M%S"];
+set sysname [info hostname];
+puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli: $connection_string'";
+
+spawn {{ connection_string }};
+set session_pid [exp_pid];
+puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='pid: $session_pid'";
+
+match_max -d 600000000;
+
+while { $session_authenticated < 1 } {
+  expect {
+    timeout {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' \
+                         rc=$ERROR_CONNECTION_TIMEOUT timeout_interval=$timeout msg='failed to connect due to timeout'";
+      exit $ERROR_CONNECTION_TIMEOUT;
+    }
+    eof {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_CONNECTION_FAILED msg='failed to connect'";
+      exit $ERROR_CONNECTION_FAILED;
+    }
+    -re "RSA key fingerprint.*you sure you want to continue connecting" {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_UNKNOWN_SSH_FINGERPRINT \
+                        msg='SSH Host Key Checking is enabled, but received unknown SSH fingerprint'";
+      exit $ERROR_UNKNOWN_SSH_FINGERPRINT;
+    }
+    "Name or service not known" {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_DNS_RESOLUTION_FAILED \
+                         msg='failed to connect due to failed dns resolution'";
+      exit $ERROR_DNS_RESOLUTION_FAILED;
+    }
+    "*assword:" {
+      if { $session_authentication_failed > 0 } {
+          puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_AUTHENTICATION_FAILED msg='authentication failed'";
+          exit $ERROR_AUTHENTICATION_FAILED;
+      }
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='connected, detected password prompt'"; 
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='sending password'";
+      send -h "$password\n";
+      incr session_authentication_failed;
+    }
+    -regexp {>\s?$} {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='authenticated successfully'";
+      if { $host_operating_system == "paloalto_panos" || $host_operating_system == "junos_qfx" || $host_operating_system == "junos_srx" || \
+           $host_operating_system == "citrix_netscaler" || $host_operating_system == "opengear_linux" || \
+           $host_operating_system == "cisco_ironport" } {
+        if { $host_operating_system == "paloalto_panos" } {
+          puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in PAN-OS Operational Mode'";
+        }
+        if { $host_operating_system == "junos_qfx" || $host_operating_system == "junos_srx" } {
+          puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Junos OS Operational Mode'";
+        }
+        if { $host_operating_system == "citrix_netscaler" } {
+          puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Operational Mode'";
+        }
+        if { $host_operating_system == "opengear_linux" } {
+          puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Linux shell'";
+        }
+        if { $host_operating_system == "cisco_ironport" } {
+          puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in IronPort AsyncOS shell'";
+        }
+        incr session_authenticated;
+        set prompt [parse_cli_prompt "$expect_out(buffer)" "prompt"];
+        set hostname [parse_cli_prompt "$expect_out(buffer)" "hostname"];
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected prompt <<$prompt>>'";
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected hostname <<$hostname>>'";
+        break;
+      }
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in User EXEC mode'";
+      send -h "enable\n";
+      while { $session_authentication_failed < 3 } {
+        expect {
+          -re "User Name:" {
+            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='prompted for Privileged EXEC mode username'";
+            send -h "$username\n";
+          }
+          "*assword:" {
+            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='prompted for Privileged EXEC mode password'";
+            send -h "$password_enable\n";
+            incr session_authentication_failed;
+          }
+          "#" {
+            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected shell prompt'";
+            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Privileged EXEC mode'";
+            incr session_authenticated;
+            set prompt [parse_cli_prompt "$expect_out(buffer)" "prompt"];
+            set hostname [parse_cli_prompt "$expect_out(buffer)" "hostname"];
+            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected prompt <<$prompt>>'";
+            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected hostname <<$hostname>>'";
+            break;
+          }
+        }
+      }
+    }
+    -re "#" {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='authenticated successfully'";
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Privileged EXEC mode'";
+      incr session_authenticated;
+      set prompt [parse_cli_prompt "$expect_out(buffer)" "prompt"];
+      set hostname [parse_cli_prompt "$expect_out(buffer)" "hostname"];
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected prompt <<$prompt>>'";
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected hostname <<$hostname>>'";
+      break;
+    }
+  }
+}
+
+set timeout 7;
+
+if { $paging_mode_on == 1 } {
+  puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='sending command to disable paging'";
+  send -h "$paging_mode_cli\n";
+  expect {
+    default {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_PAGING_OFF_FAILED msg='failed to disable paging'";
+      exit $ERROR_PAGING_OFF_FAILED;
+    }
+    -regexp "$prompt" {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='disabled paging successfully'";
+    }
+  }
+}
+
+if { $scripting_mode_on == 1 } {
+  send -h "$scripting_mode_cli\n";
+  expect {
+    default {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_SCRIPTING_ON_FAILED msg='failed to enable scripting mode'";
+      exit $ERROR_SCRIPTING_ON_FAILED;
+    }
+    -regexp "$prompt" {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='enabled scripting mode successfully'";
+    }
+  }
+}
+
+set cli_prompt "$prompt";
+set cli_prompt_extended [get_optional_prompt "$prompt"];
+puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='optional prompt is $cli_prompt_extended'";
+
+while {1} {
+  set clitask [get_cli_task "clitask"];
+  set clifile [get_cli_task "clifile"];
+  set climode [get_cli_task "climode"];
+  set clilines 0;
+  if { $clitask == "" || $clitask == "eol" } {
+    puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='received end of task list'";
+    break;
+  } else {
+    puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli task: $clitask'";
+    puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli output filename: $clifile'";
+    puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli mode: $climode'";
+  }
+  set fh [open "$session_dir/$clifile" "w"];
+  if { $host_operating_system == "brocade_serveriron" || $host_operating_system == "paloalto_panos" } {
+    send -h "\x0d\x0a";
+  }
+  send -h "$clitask\n";
+  expect -re "\r\n|\n|\r";
+  set expect_out(buffer) {};
+  while 1 {
+    expect {
+      default {
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='expect defaulted'";
+        set cli_output [parse_cli "$expect_out(buffer)"];
+        puts -nonewline $fh $cli_output;
+        set expect_out(buffer) {};
+        break;
+      }
+      -regexp "loadconfig command" {
+        # This section is only applicable to Cisco IronPort
+        set cli_output [parse_cli "$expect_out(buffer)"];
+        puts -nonewline $fh $cli_output;
+        set expect_out(buffer) {};
+        # sending Y to mask passwords
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='sending Y to mask passwords'";
+        send -h "\x59\x0d\x0a";
+      }
+      -regexp "Key For More" {
+        # This section is only applicable to Cisco IronPort
+        set cli_output [parse_cli "$expect_out(buffer)"];
+        puts -nonewline $fh $cli_output;
+        set expect_out(buffer) {};
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='sending newline character to continue'";
+        # sending newline character to continue
+        #send -h "\x20";
+        send -h "\x0a";
+      }
+      -regexp "Building configuration..." {
+        # This section is only applicable to Cisco switches, e.g. Cisco Catalyst 6500
+        set cli_output [parse_cli "$expect_out(buffer)"];
+        set expect_out(buffer) {};
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='adjusting expect timeout value'";
+        set timeout 75;
+      }
+      -re "\r\n|\n|\r" {
+        #puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='received newline character'";
+        set cli_output [parse_cli "$expect_out(buffer)"];
+        puts -nonewline $fh $cli_output;
+        set expect_out(buffer) {};
+        incr clilines;
+      }
+      -regexp "^$cli_prompt" {
+        set cli_output [parse_cli "$expect_out(buffer)"];
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='received return prompt: $cli_output'";
+        set expect_out(buffer) {};
+        break;
+      }
+      -regexp "$cli_prompt_extended" {
+        set cli_output [parse_cli "$expect_out(buffer)"];
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='received modified return prompt: $cli_output'";
+        set expect_out(buffer) {};
+        break;
+      }
+    }
+  }
+  close $fh;
+}
+
+send -h "exit\n";
+puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='finished command batch execution' rc=0";
+exit 0;

@@ -1,0 +1,13 @@
+---
+- hosts:
+  - ny-fw01
+  gather_facts: no
+  vars:
+    ansible_connection: local
+  vars_files:
+    - "~/.clicap.vault.yml"
+  tasks:
+  - name: gather datestamp
+    set_fact: datestamp="{{lookup('pipe','date +%Y%m%d')}}"
+  - name: collect running configuration only
+    action: clicap output=/tmp/clicap-{{ datestamp }} gather_config=yes

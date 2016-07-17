@@ -1,0 +1,79 @@
+---
+allowed_os:
+- 'arista_eos'
+- 'cisco_acs'
+- 'cisco_asa'
+- 'cisco_ios'
+- 'cisco_iosxe'
+- 'cisco_ironport'
+- 'cisco_nxos'
+- 'cisco_nxos_cmp'
+- 'cisco_nxos_mds'
+- 'citrix_netscaler'
+- 'junos_qfx'
+- 'junos_srx'
+- 'opengear_linux'
+- 'paloalto_panos'
+
+output_filter_remove:
+- '^!Time:'
+- 'Load for five secs'
+- 'Time source is '
+- 'ntp clock-period'
+- '^!Time:'
+- '^Kernel uptime is'
+- '^Holdtime:'
+- '^Holdtime :'
+- ' uptime is '
+- 'Switch Uptime '
+- 'Current Time'
+- 'mask the password'
+- '!Startup config saved at'
+- 'Uptime for '
+- 'switched to active is'
+- 'Age of the port-channel is'
+- 'Time since last bundle is'
+- 'Topology file'
+- 'Initiated from node'
+- '! NVRAM config last updated'
+- '\s+Done'
+- 'Do you want to mask the password'
+
+output_filter_replace:
+- regex:
+  - '-Press Any Key For More-'
+  - 'Time Remaining.*'
+  - '[ ]*$'
+  replace: ''
+
+output_errors:
+- regex:
+  - "[Aa]mbiguous command"
+  - "ERROR: Ambiguous"
+  msg: "ambiguous command"
+- regex:
+  - "[Ii]ncomplete command"
+  msg: "incomplete command"
+- regex:
+  - "[Ii]nvalid input"
+  - "[Ii]nvalid [Aa]rgument"
+  msg: "invalid input"
+- regex:
+  - "WARNING:"
+  msg: "command resulting in warning"
+- regex:
+  - "[Ss]yntax error"
+  - "[Ii]nvalid [Ss]yntax"
+  msg: "syntax error"
+  exception:
+  - "show tech"
+- regex:
+  - "[Uu]nknown command"
+  msg: "unknown command"
+  exception:
+  - "show tech"
+- regex:
+  - "[Ii]nvalid [Cc]ommand"
+  msg: "invalid command"
+  exception:
+  - "show tech"

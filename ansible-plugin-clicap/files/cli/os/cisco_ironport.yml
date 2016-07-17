@@ -1,0 +1,10 @@
+---
+clicap:
+- cli: showconfig
+  tags: configuration
+  paging: 'terminal pager 0'
+  format: xml
+- cli: version
+  tags: version
+- cli: status detail
+- cli: arp

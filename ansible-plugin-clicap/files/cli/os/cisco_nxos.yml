@@ -1,0 +1,49 @@
+---
+clicap:
+- cli: show running-config
+  tags: configuration
+  paging: 'terminal length 0'
+- cli: show version
+  tags: version
+- cli: show ip arp vrf all
+- cli: show clock
+- cli: show ip route vrf all
+- cli: show ntp peer-status
+- cli: show ntp status
+- cli: show ip mroute vrf all
+  capability: multicast
+- cli: show ip mroute summary count vrf all
+  capability: multicast
+- cli: show ip igmp snooping groups detail
+  capability: multicast
+- cli: show ip pim rp vrf all
+  capability: multicast
+- cli: show ip pim neighbor vrf all
+  capability: multicast
+- cli: show ip pim interface vrf all
+  capability: multicast
+- cli: show ip pim group-range vrf all
+  capability: multicast
+- cli: show startup-config
+- cli: show interface
+- cli: show vlan
+  capability: switch
+- cli: show port-channel database
+  capability: switch
+- cli: show port-channel traffic
+  capability: switch
+- cli: show mac address-table
+- cli: show ip interface vrf all
+  capability: switch
+- cli: show route-map
+- cli: show ip access-list
+- cli: show inventory
+- cli: show module
+- cli: show ip igmp group vrf all
+  capability: multicast
+- cli: show ip igmp interface vrf all
+  capability: multicast
+- cli: show ip bgp summary vrf all
+  capability: router
+- cli: show vrf all
+  capability: router

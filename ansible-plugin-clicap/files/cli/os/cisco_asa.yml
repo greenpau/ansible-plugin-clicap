@@ -1,0 +1,22 @@
+---
+clicap:
+- cli: show running-config
+  tags: configuration
+  paging: 'terminal pager 0'
+- cli: show version
+  tags: version
+- cli: show arp
+- cli: show clock
+- cli: show ntp associations
+- cli: show ntp status
+- cli: show startup-config
+- cli: show interface
+- cli: show access-list
+- cli: show ip address
+- cli: show module all
+- cli: show failover
+- cli: show route
+- cli: show traffic
+- cli: show asp drop
+- cli: show wccp
+- cli: show nat

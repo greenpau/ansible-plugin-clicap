@@ -1,0 +1,24 @@
+---
+clicap:
+- cli: show arp
+- cli: show clock
+- cli: show uptime
+- cli: show ip route
+- cli: show version
+  tags: version
+- cli: show ntp associations
+- cli: show ntp status
+- cli: show running-config
+  tags: configuration
+  paging: 'terminal length 0'
+- cli: show startup-config
+- cli: show interface
+- cli: show switch forwarding-mode
+- cli: show mac address-table
+- cli: show ip interface
+- cli: show ip access-list
+- cli: show inventory
+- cli: show ip igmp group
+  feature: multicast
+- cli: show ip igmp interface
+  feature: multicast

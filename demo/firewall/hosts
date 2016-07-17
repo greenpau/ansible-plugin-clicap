@@ -1,0 +1,10 @@
+#
+# Managed devices
+#
+
+controller ansible_connection=local
+
+ny-fw01 clicap_os=cisco_asa clicap_host_overwrite=192.168.99.39
+
+[all:vars]
+contact_person=Paul Greenberg @greenpau

@@ -1,0 +1,15 @@
+---
+clicap:
+- cli: show running-config
+  tags: configuration
+  paging: 'terminal length 0'
+- cli: show cdp neighbors
+- cli: show clock
+- cli: show inventory
+- cli: show interface
+- cli: show startup-config
+- cli: show ntp
+- cli: show ports
+- cli: show version
+  tags: version
+- cli: show ip route
