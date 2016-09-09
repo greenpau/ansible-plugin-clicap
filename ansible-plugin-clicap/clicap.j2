@@ -321,6 +321,10 @@ while {1} {
     puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli task: $clitask'";
     puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli output filename: $clifile'";
     puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli mode: $climode'";
+    if { $climode == "noop" } {
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='skipped the above task";
+      continue;
+    }
   }
   set fh [open "$session_dir/$clifile" "w"];
   if { $host_operating_system == "brocade_serveriron" || $host_operating_system == "paloalto_panos" } {

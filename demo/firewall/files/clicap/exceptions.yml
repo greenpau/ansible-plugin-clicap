@@ -1,0 +1,6 @@
+---
+exceptions:
+- hosts: '.*'
+  cli: 'XXXX'
+- hosts: '.*'
+  cli: 'YYYY'

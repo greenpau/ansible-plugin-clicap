@@ -109,10 +109,12 @@ class ActionModule(ActionBase):
                 return dict(msg='\n'.join(self.errors), failed=True);
 
         '''
-        Load plugin configuration file.
+        Load plugin configuration file and exceptions.
         '''
 
         self._load_conf();
+        self.conf['cliset_exc'] = self._task.args.get('cliset_exc', os.path.join(self.ansible_root, 'files', self.plugin_name, 'exceptions.yml'));
+        self._load_exceptions();
 
         '''
         Check for operating system support.
@@ -218,7 +220,7 @@ class ActionModule(ActionBase):
                 self.info['return_status'] = 'failed';
 
         if self.errors:
-            display.display('<' + self.info['host'] + '> review "' + self.conf['log'] + '" for details', color='red');
+            display.display('<' + self.info['host'] + '> review "' + self.conf['temp_dir'] + '" directory for details', color='red');
             result = dict(msg='\n'.join(self.errors), failed=True);
         elif self.info['return_status'] == 'unreachable':
             if 'return_msg' in self.info:
@@ -226,7 +228,7 @@ class ActionModule(ActionBase):
             else:
                 result = dict(unreachable=True);
         elif self.info['return_status'] == 'failed':
-            display.display('<' + self.info['host'] + '> review "' + self.conf['log'] + '" for details', color='red');
+            display.display('<' + self.info['host'] + '> review "' + self.conf['temp_dir'] + '" directory for details', color='red');
             if 'return_msg' in self.info:
                 result = dict(msg=self.info['return_msg'], failed=True);
             else:
@@ -234,19 +236,19 @@ class ActionModule(ActionBase):
         else:
             _failed_cli = [];
             for _id in self.conf['cliset']:
-                if 'result' in self.conf['cliset'][_id]:
-                    if self.conf['cliset'][_id]['result'] == 'failed':
+                if 'status' in self.conf['cliset'][_id]:
+                    if self.conf['cliset'][_id]['status'] == 'failed':
                         _failed_cli.append(self.conf['cliset'][_id]['cli']);
             result = dict({});
             if _failed_cli:
-                display.display('<' + self.info['host'] + '> review "' + self.conf['log'] + '" for details', color='red');
+                display.display('<' + self.info['host'] + '> review "' + self.conf['temp_dir'] + '" directory for details', color='red');
                 result['msg'] = 'failed ' + ','.join(_failed_cli);
                 result['failed'] = True;
             else:
                 if 'output_dir' in self.conf:
                     self._commit();
                 else:
-                    display.display('<' + self.info['host'] + '> review "' + self.conf['log'] + '" for details', color='green');
+                    display.display('<' + self.info['host'] + '> review "' + self.conf['temp_dir'] + '" directory for details', color='green');
                 if 'changed' in self.info:
                     result['changed'] = True;
                 result['ok'] = True;
@@ -460,19 +462,23 @@ class ActionModule(ActionBase):
                             if self.conf['cliset_last_eid'] > 0:
                                 filepath = os.path.join(self.conf['temp_dir'], self.conf['cliset'][self.conf['cliset_last_eid']]['filename']);
                                 self.conf['cliset'][self.conf['cliset_last_eid']]['time_end'] = int(round(time.time() * 1000));
-                                _is_failed = self._parse_cli_output(filepath, self.conf['cliset_last_eid']);
-                                if _is_failed:
-                                    self.conf['cliset'][self.conf['cliset_last_eid']]['status'] = 'failed';
-                                    if self.conf['on_error'] == 'abort':
-                                        self.conf['abort'] = True;
-                                    display.display('<' + self.info['host'] + '> completed running "' + self.conf['cliset'][self.conf['cliset_last_eid']]['cli'] + \
-                                                    '" command: fail', color='red');
+                                if self.conf['cliset'][self.conf['cliset_last_eid']]['status'] == 'skipped':
+                                    display.display('<' + self.info['host'] + '> skipped "' + self.conf['cliset'][self.conf['cliset_last_eid']]['cli'] + \
+                                                    '" command: skip', color='yellow');
                                 else:
-                                    display.display('<' + self.info['host'] + '> completed running "' + self.conf['cliset'][self.conf['cliset_last_eid']]['cli'] + \
-                                                    '" command: ok', color='green');
-                                    if self.conf['cliset'][self.conf['cliset_last_eid']]['mode'] == 'analytics':
-                                         self.conf['cliset'][self.conf['cliset_last_eid']]['sha1'] = self._get_sha1_hash(filepath);
-                                         self.conf['cliset'][self.conf['cliset_last_eid']]['path'] = filepath;
+                                    _is_failed = self._parse_cli_output(filepath, self.conf['cliset_last_eid']);
+                                    if _is_failed:
+                                        self.conf['cliset'][self.conf['cliset_last_eid']]['status'] = 'failed';
+                                        if self.conf['on_error'] == 'abort':
+                                            self.conf['abort'] = True;
+                                        display.display('<' + self.info['host'] + '> completed running "' + self.conf['cliset'][self.conf['cliset_last_eid']]['cli'] + \
+                                                        '" command: fail', color='red');
+                                    else:
+                                        display.display('<' + self.info['host'] + '> completed running "' + self.conf['cliset'][self.conf['cliset_last_eid']]['cli'] + \
+                                                        '" command: ok', color='green');
+                                        if self.conf['cliset'][self.conf['cliset_last_eid']]['mode'] == 'analytics':
+                                            self.conf['cliset'][self.conf['cliset_last_eid']]['sha1'] = self._get_sha1_hash(filepath);
+                                            self.conf['cliset'][self.conf['cliset_last_eid']]['path'] = filepath;
 
                             '''
                             check for the commands pending execution on a remote device.
@@ -556,7 +562,8 @@ class ActionModule(ActionBase):
         if not fc:
             if self.conf['cliset'][cli_id]['mode'] == 'configure':
                 return False;
-            self.errors.append('failed to parse the output of \'' + str(cli) + '\' command');
+            self.errors.append('the \'' + str(cli) + '\' command produced no output');
+            self.conf['cliset'][cli_id]['status'] = 'failed';
             return True;
         '''
         Secure captured cli output.
@@ -564,6 +571,8 @@ class ActionModule(ActionBase):
         try:
             os.chmod(fn, stat.S_IRUSR | stat.S_IWUSR);
         except:
+            self.conf['cliset'][cli_id]['status'] = 'failed';
+            self.conf['cliset'][cli_id]['error_msg'] = traceback.format_exc();
             self.errors.append('<' + self.info['host'] + '> ' + traceback.format_exc());
             return True;
         '''
@@ -586,6 +595,7 @@ class ActionModule(ActionBase):
                             self.errors.append('\'' + str(cli) + '\' command failed due to ' + err['msg']);
                             if 'error_msg' not in self.conf['cliset'][cli_id]:
                                 self.conf['cliset'][cli_id]['error_msg'] = [];
+                            self.conf['cliset'][cli_id]['status'] = 'failed';
                             self.conf['cliset'][cli_id]['error_msg'].append(fc);
                             return True;
             _is_removed = False;
@@ -646,6 +656,29 @@ class ActionModule(ActionBase):
             if i in fc:
                 self.conf[i] = fc[i];
         return;
+
+
+    def _load_exceptions(self):
+        '''
+        This function loads the exceptions for cli sets of this plugin.
+        '''
+        fc = None;
+        try:
+            with open(self.conf['cliset_exc']) as f:
+                fc = yaml.load(f);
+        except:
+            return;
+        if 'exceptions' not in fc:
+            return;
+        for r in fc['exceptions']:
+            if 'exceptions' not in self.conf:
+                self.conf['exceptions'] = [];
+            for i in ['hosts', 'cli']:
+                if i not in r:
+                    raise AnsibleError('cli exceptions file "' + str(self.conf['cliset_exc']) + '" is missing "' + i + '" mandatory field');
+                if not isinstance(r[i], str):
+                    raise AnsibleError('the "' + i + '" mandatory field in cli exceptions file "' + str(self.conf['cliset_exc']) + '" must be a string with a valid regular expression');
+            self.conf['exceptions'].append(r);
 
 
     def _load_credentials(self, db=dict()):
@@ -821,8 +854,14 @@ class ActionModule(ActionBase):
                 self.conf['cliset'][self.conf['cliset_last_id']]['source'] = src;
                 self.conf['cliset'][self.conf['cliset_last_id']]['cli'] = entry_task;
                 self.conf['cliset'][self.conf['cliset_last_id']]['mode'] = entry_mode;
+                self.conf['cliset'][self.conf['cliset_last_id']]['status'] = 'unknown';
                 if entry_tags:
                     self.conf['cliset'][self.conf['cliset_last_id']]['tags'] = entry_tags;
+                if 'exceptions' in self.conf and entry_mode == 'analytics':
+                    for r in self.conf['exceptions']:
+                        if re.match(r['hosts'], self.info['host']) and re.match(r['cli'], entry_task):
+                            self.conf['cliset'][self.conf['cliset_last_id']]['status'] = 'skipped';
+                            self.conf['cliset'][self.conf['cliset_last_id']]['mode'] = 'noop';
             for t in entry_tags:
                 if t in ['version', 'configuration'] and 'cli' in entry:
                     self.conf[t] = entry['cli'];
@@ -841,13 +880,16 @@ class ActionModule(ActionBase):
         for _id in self.conf['cliset']:
             h = self.conf['cliset'][_id];
             j['tests'] += 1;
-            if 'result' in h:
-                if h['result'] == 'failed':
+            if 'status' in h:
+                if h['status'] == 'failed':
                     j['failures'] += 1;
-                elif h['result'] == 'skipped':
+                    continue;
+                if h['status'] == 'skipped':
                     j['skipped'] += 1;
-                else:
-                    pass;
+                    continue;
+            if 'error_msg' in h:
+                j['failures'] += 1;
+                continue;
         jtime = (self.conf['time_end'] - self.conf['time_start']) / 1000;
         jts = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(self.conf['time_start'] / 1000));
         r.append('  <testsuite name="' + self.info['host'] + '" errors="' + str(j['errors']) + '" skipped="' + str(j['skipped']) + \
@@ -899,6 +941,13 @@ class ActionModule(ActionBase):
         with open(os.path.join(self.conf['temp_dir'], self.info['host'] + '.junit.xml'), 'w') as f:
             f.write('\n'.join(r));
         if self.conf['output_dir'] is not None:
+            commit_dir = os.path.join(self.conf['output_dir'], self.info['host']);
+            if not os.path.exists(commit_dir):
+                try:
+                    os.makedirs(commit_dir, mode=0700);
+                except:
+                    display.display('<' + self.info['host'] + '> ' + traceback.format_exc(), color='red');
+                    return;
             with open(os.path.join(self.conf['output_dir'], self.info['host'], self.info['host'] + '.junit.xml'), 'w') as f:
                 f.write('\n'.join(r));
         return;

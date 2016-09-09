@@ -9,7 +9,7 @@ import re;
 import stat;
 
 pkg_name = 'ansible-plugin-clicap';
-pkg_ver = '0.1';
+pkg_ver = "0.2";
 
 def _load_test_suite():
     test_loader = unittest.TestLoader();
@@ -91,7 +91,7 @@ pkg_data=[
     '*.yml',
     '*.j2',
     'files/cli/os/*.yml',
-    'README.md',
+    'README.rst',
 ];
 pkg_platforms='any';
 pkg_classifiers=[
