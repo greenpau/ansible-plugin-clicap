@@ -829,6 +829,8 @@ class ActionModule(ActionBase):
                             _is_duplicate_cli = True;
                             display.vv('duplicate cli command \'' + entry['cli'] + '\'', host=self.info['host']);
                         if self.conf['cliset'][c]['mode'] != entry_mode:
+                            if entry_mode == 'noop' or self.conf['cliset'][c]['mode'] == 'noop':
+                                continue;
                             self.errors.append('the plugin does not support the mixing of \'configure\' and \'analytics\' modes');
                             return;
             if _is_duplicate_cli:
@@ -912,7 +914,8 @@ class ActionModule(ActionBase):
             r.append('        <![CDATA[');
             for p in ['mode', 'format', 'filename', 'path', 'sha1', 'sha1_pre', 'source', 'tags']:
                 if p in h:
-                    r.append('          ' + p + ': ' + str(h[p]));
+                    #r.append('          ' + p + ': ' + str(h[p]));
+                    r.append(p + ': ' + str(h[p]));
             r.append('        ]]>');
             r.append('      </system-out>');
             if 'error_msg' in h:
@@ -920,10 +923,12 @@ class ActionModule(ActionBase):
                 r.append('        <![CDATA[');
                 for p in h['error_msg']:
                     if isinstance(p, str):
-                        r.append('          ' + p);
+                        r.append(p);
+                        #r.append('          ' + p);
                     elif isinstance(p, list):
                         for pi in p:
-                            r.append('          ' + pi);
+                            r.append(pi);
+                            #r.append('          ' + pi);
                     else:
                         pass;
                 r.append('        ]]>');

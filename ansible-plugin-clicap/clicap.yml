@@ -12,6 +12,7 @@ allowed_os:
 - 'citrix_netscaler'
 - 'junos_qfx'
 - 'junos_srx'
+- 'generic_linux'
 - 'opengear_linux'
 - 'paloalto_panos'
 

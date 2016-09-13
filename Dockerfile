@@ -22,7 +22,7 @@ COPY demo/firewall/files/clicap/spec/*.yml /etc/ansible/files/clicap/spec/
 COPY demo/firewall/files/clicap/os/*.yml /etc/ansible/files/clicap/os/
 COPY demo/firewall/files/clicap/host/*.yml /etc/ansible/files/clicap/host/
 COPY demo/firewall/files/clicap/exceptions.yml /etc/ansible/files/clicap/
-COPY dist/ansible-plugin-clicap-0.2.tar.gz /usr/local/src/
-RUN  pip install /usr/local/src/ansible-plugin-clicap-0.2.tar.gz
+COPY dist/ansible-plugin-clicap-0.3.tar.gz /usr/local/src/
+RUN  pip install /usr/local/src/ansible-plugin-clicap-0.3.tar.gz
 
 ENTRYPOINT ["/bin/sh"]

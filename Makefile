@@ -3,7 +3,7 @@
 export USER
 PLUGIN_NAME="ansible-plugin-clicap"
 PLUGIN_NAME_EGG := $(subst -,_,$(PLUGIN_NAME))
-PLUGIN_VER="0.2"
+PLUGIN_VER="0.3"
 DOCKER_IMAGE_NAME="greenpau/ansible2"
 DOCKER_CONTAINER_NAME="ansible2"
 DOCKER_CONTAINER_SHELL="/bin/sh"
@@ -39,6 +39,7 @@ connect:
 	@echo ${DOCKER_BINARY} exec -i -t ${DOCKER_CONTAINER_NAME} ${DOCKER_CONTAINER_SHELL}
 
 package:
+	@sed -i 's/    VERSION:.*/    VERSION: ${PLUGIN_VER}/' circle.yml
 	@sed -i 's/pkg_ver =.*/pkg_ver = ${PLUGIN_VER};/' setup.py
 	@sed -i 's/-[0-9]\.[0-9].tar.gz/-${PLUGIN_VER}.tar.gz/;s/"//g;s/ENTRYPOINT.*/ENTRYPOINT \["\/bin\/sh"\]/;' Dockerfile
 	@pandoc --from=markdown --to=rst --output=${PLUGIN_NAME}/README.rst README.md

@@ -1,6 +1,8 @@
 ansible-plugin-clicap
 =====================
 
+|CircleCI|
+
 Ansible plugin for collecting (capturing) command-line (cli) output from
 and interacting with network devices.
 
@@ -158,3 +160,6 @@ commands associated with Cisco ASA operating system.
 It will also record which commands show configuration and version
 information, and which commands should be used to disable paging or
 switch to automation mode.
+
+.. |CircleCI| image:: https://circleci.com/gh/greenpau/ansible-plugin-clicap.svg?style=svg
+   :target: https://circleci.com/gh/greenpau/ansible-plugin-clicap

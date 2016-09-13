@@ -1,0 +1,45 @@
+general:
+  branches:
+    ignore:
+      - test
+      - admin
+
+machine:
+  timezone:
+    America/New_York
+  python:
+    version: 2.7.5
+  environment:
+    PACKAGE: ansible-plugin-clicap
+    VERSION: "0.3"
+    TAG1: ${VERSION}-$(date +%Y%m%dT%H%M)-git-${CIRCLE_SHA1:0:7}
+    TAG2: ${CIRCLE_PR_USERNAME}_${CIRCLE_BRANCH/pull\//pr_}
+  services:
+    - docker
+
+dependencies:
+  override:
+    - docker info
+    - docker version
+    - git branch
+    - git remote -v
+    - cat .git/config
+    - pwd
+    - ls -alh
+    - pip install GitPython
+    - pip install ansible==2.1.0.0
+    - sudo apt-get update
+    - sudo apt-get install pandoc expect
+    - cp demo/firewall/myvault.yml ~/.clicap.vault.yml
+    - cp demo/firewall/vault.passwd ~/.vault.passwd
+
+test:
+  override:
+    - make package
+    - pip install dist/${PACKAGE}-${VERSION}.tar.gz
+    - cd demo/firewall && ansible-playbook playbooks/collect_all.yml -i hosts --vault-password-file ~/.vault.passwd --check -vvv
+  post:
+    - mkdir -p ${CIRCLE_ARTIFACTS}/junit/
+    - find ~/.ansible -type f -regex ".*\.junit\.xml" -exec cp {} ${CIRCLE_ARTIFACTS}/junit/ \;
+    - mkdir -p ${CIRCLE_TEST_REPORTS}/junit/
+    - find ~/.ansible -type f -regex ".*\.junit\.xml" -exec cp {} ${CIRCLE_TEST_REPORTS}/junit/ \;

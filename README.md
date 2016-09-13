@@ -1,5 +1,7 @@
 # ansible-plugin-clicap
 
+[![CircleCI](https://circleci.com/gh/greenpau/ansible-plugin-clicap.svg?style=svg)](https://circleci.com/gh/greenpau/ansible-plugin-clicap)
+
 Ansible plugin for collecting (capturing) command-line (cli) output from
 and interacting with network devices.
 

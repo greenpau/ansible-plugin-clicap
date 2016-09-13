@@ -99,6 +99,7 @@ proc get_credentials {tp} {
     }
   }
   send_user "\n";
+  stty sane;
 }
 
 
@@ -120,6 +121,7 @@ proc get_cli_task {item} {
     }
   }
   send_user "\n";
+  stty sane;
   return $item;
 }
 
@@ -213,8 +215,8 @@ while { $session_authenticated < 1 } {
     -regexp {>\s?$} {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='authenticated successfully'";
       if { $host_operating_system == "paloalto_panos" || $host_operating_system == "junos_qfx" || $host_operating_system == "junos_srx" || \
-           $host_operating_system == "citrix_netscaler" || $host_operating_system == "opengear_linux" || \
-           $host_operating_system == "cisco_ironport" } {
+           $host_operating_system == "citrix_netscaler" || $host_operating_system == "generic_linux" || \
+           $host_operating_system == "opengear_linux" || $host_operating_system == "cisco_ironport" } {
         if { $host_operating_system == "paloalto_panos" } {
           puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in PAN-OS Operational Mode'";
         }
@@ -224,7 +226,7 @@ while { $session_authenticated < 1 } {
         if { $host_operating_system == "citrix_netscaler" } {
           puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Operational Mode'";
         }
-        if { $host_operating_system == "opengear_linux" } {
+        if { $host_operating_system == "generic_linux" || $host_operating_system == "opengear_linux" } {
           puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Linux shell'";
         }
         if { $host_operating_system == "cisco_ironport" } {
@@ -332,6 +334,7 @@ while {1} {
   }
   send -h "$clitask\n";
   expect -re "\r\n|\n|\r";
+  expect -re $;
   set expect_out(buffer) {};
   while 1 {
     expect {
@@ -394,4 +397,5 @@ while {1} {
 
 send -h "exit\n";
 puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='finished command batch execution' rc=0";
+stty sane;
 exit 0;
