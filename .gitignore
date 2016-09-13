@@ -1,5 +1,7 @@
-# Personal files
+# Docker temp files
+docker/alpine/demo/
 
+# Personal files
 TODO
 *.hidden
 

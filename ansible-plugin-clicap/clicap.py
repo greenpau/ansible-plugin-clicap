@@ -102,7 +102,7 @@ class ActionModule(ActionBase):
             self.errors.append('"identity" task argument contains invalid value: "' + str(self.conf['identity']) + '"');
         self.info['fqdn'] = task_vars.get('inventory_hostname', None);
         self.info['hostname'] = task_vars.get('inventory_hostname_short', None);
-        for i in ['os', 'capabilities', 'host_overwrite', 'host_port', 'host_protocol', 'ssh_proxy']:
+        for i in ['os', 'capabilities', 'host_overwrite', 'host_port', 'host_protocol', 'ssh_proxy', 'ssh_proxy_user']:
             self.info[i] = task_vars.get(self.plugin_name + '_' + i, None);
             if self.info[i] is None and i in ['os']:
                 self.errors.append('\'' + self.plugin_name + '_' + i + '\' inventory attribute must be associated with ' + self.info['host']);
@@ -289,8 +289,9 @@ class ActionModule(ActionBase):
                 self.conf['args'] += ' -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no';
             '''
             The below line is a workaround for older versions of OpenSSH server.
+            It is advisable to do it in ~/.ssh/config file
+                self.conf['args'] += ' -o KexAlgorithms=+diffie-hellman-group1-sha1';
             '''
-            self.conf['args'] += ' -o KexAlgorithms=+diffie-hellman-group1-sha1';
             if self.info['host_port'] is not None:
                 self.conf['args'] += ' -p ' + self.info['host_port']
             self.conf['args'] += ' -tt ' + self.conf['username'] + '@';

@@ -162,12 +162,9 @@ proc get_optional_prompt {prompt} {
   return $prompt_start$prompt_vars$prompt_end;
 }
 
-get_credentials "username";
 puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' controller='$controller'\
          host='$host' operating_system='$host_operating_system' tool='ansible'\
-         plugin='$plugin' user='$username' action='init'";
-get_credentials "password";
-get_credentials "password_enable";
+         plugin='$plugin' action='init'";
 
 set send_human {.1 .3 1 .05 2};
 set timeout 30;
@@ -181,7 +178,7 @@ puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg=
 
 match_max -d 600000000;
 
-while { $session_authenticated < 1 } {
+while {1} {
   expect {
     timeout {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' \
@@ -202,17 +199,69 @@ while { $session_authenticated < 1 } {
                          msg='failed to connect due to failed dns resolution'";
       exit $ERROR_DNS_RESOLUTION_FAILED;
     }
-    "*assword:" {
-      if { $session_authentication_failed > 0 } {
+    -regexp {[Uu]ser\s?[Nn]ame:\s?$} {
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      set last_response [open "$session_dir/last_response.txt" "a"];
+      set auth_response [open "$session_dir/auth_response.txt" "a"];
+      puts $last_response $cli_output;
+      puts $auth_response $cli_output;
+      close $last_response;
+      close $auth_response;
+      set expect_out(buffer) {};
+      if { $session_authenticated > 0 } {
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='prompted for Privileged EXEC mode username'";
+        get_credentials "username";
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='sending Privileged EXEC mode username'";
+        send -h "$username\n";
+      } else {
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='connected, detected username prompt'";
+        get_credentials "username";
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='sending username'";
+        send -h "$username\n";
+      }
+      expect -re "\r\n|\n|\r";
+      expect -re $;
+    }
+    -regexp {[Pp]assword:\s?$} {
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      set last_response [open "$session_dir/last_response.txt" "w"];
+      set auth_response [open "$session_dir/auth_response.txt" "a"];
+      puts $last_response $cli_output;
+      puts $auth_response $cli_output;
+      close $last_response;
+      close $auth_response;
+      set expect_out(buffer) {};
+      if { $session_authenticated > 0 } {
+        if { $session_authentication_failed > 0 } {
+          puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_AUTHENTICATION_FAILED msg='Privileged EXEC mode authentication failed'";
+          exit $ERROR_AUTHENTICATION_FAILED;
+        }
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='prompted for Privileged EXEC mode password'";
+        get_credentials "password_enable";
+        send -h "$password_enable\n";
+        incr session_authentication_failed;
+      } else {
+        if { $session_authentication_failed > 0 } {
           puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_AUTHENTICATION_FAILED msg='authentication failed'";
           exit $ERROR_AUTHENTICATION_FAILED;
+        }
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='connected, detected password prompt'";
+        get_credentials "password";
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='sending password'";
+        send -h "$password\n";
+        incr session_authentication_failed;
       }
-      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='connected, detected password prompt'"; 
-      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='sending password'";
-      send -h "$password\n";
-      incr session_authentication_failed;
+      expect -re "\r\n|\n|\r";
+      expect -re $;
     }
     -regexp {>\s?$} {
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      set last_response [open "$session_dir/last_response.txt" "w"];
+      set auth_response [open "$session_dir/auth_response.txt" "a"];
+      puts $last_response $cli_output;
+      puts $auth_response $cli_output;
+      close $last_response;
+      close $auth_response;
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='authenticated successfully'";
       if { $host_operating_system == "paloalto_panos" || $host_operating_system == "junos_qfx" || $host_operating_system == "junos_srx" || \
            $host_operating_system == "citrix_netscaler" || $host_operating_system == "generic_linux" || \
@@ -241,31 +290,14 @@ while { $session_authenticated < 1 } {
       }
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in User EXEC mode'";
       send -h "enable\n";
-      while { $session_authentication_failed < 3 } {
-        expect {
-          -re "User Name:" {
-            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='prompted for Privileged EXEC mode username'";
-            send -h "$username\n";
-          }
-          "*assword:" {
-            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='prompted for Privileged EXEC mode password'";
-            send -h "$password_enable\n";
-            incr session_authentication_failed;
-          }
-          "#" {
-            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected shell prompt'";
-            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Privileged EXEC mode'";
-            incr session_authenticated;
-            set prompt [parse_cli_prompt "$expect_out(buffer)" "prompt"];
-            set hostname [parse_cli_prompt "$expect_out(buffer)" "hostname"];
-            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected prompt <<$prompt>>'";
-            puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected hostname <<$hostname>>'";
-            break;
-          }
-        }
+      expect -re "\r\n|\n|\r";
+      expect -re $;
+      if { $session_authenticated < 1 } {
+        incr session_authenticated;
+        set session_authentication_failed 0;
       }
     }
-    -re "#" {
+    -regexp {[#]\s?$} {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='authenticated successfully'";
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Privileged EXEC mode'";
       incr session_authenticated;

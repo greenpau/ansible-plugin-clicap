@@ -4,3 +4,5 @@ exceptions:
   cli: 'XXXX'
 - hosts: '.*'
   cli: 'YYYY'
+- hosts: 'ny-fw03'
+  cli: 'show ssh sessions'

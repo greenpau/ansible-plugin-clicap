@@ -4,7 +4,13 @@
 
 controller ansible_connection=local
 
+[org:children]
+test
+
+[test]
 ny-fw01 clicap_os=cisco_asa clicap_host_overwrite=192.168.99.39
+ny-fw02 clicap_os=cisco_asa clicap_host_overwrite=192.168.99.39 clicap_ssh_proxy=192.168.99.60 clicap_ssh_proxy_user=greenpau
+ny-fw03 clicap_os=cisco_asa clicap_host_overwrite=192.168.99.39 clicap_host_protocol=telnet
 
 [all:vars]
 contact_person=Paul Greenberg @greenpau

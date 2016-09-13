@@ -3,7 +3,7 @@
 export USER
 PLUGIN_NAME="ansible-plugin-clicap"
 PLUGIN_NAME_EGG := $(subst -,_,$(PLUGIN_NAME))
-PLUGIN_VER="0.3"
+PLUGIN_VER="0.4"
 DOCKER_IMAGE_NAME="greenpau/ansible2"
 DOCKER_CONTAINER_NAME="ansible2"
 DOCKER_CONTAINER_SHELL="/bin/sh"
@@ -16,7 +16,11 @@ all:
 	@echo 'the only available options are: build, run, clean, and status' || false
 
 build:
-	@eval ${DOCKER_BINARY} build -t ${DOCKER_IMAGE_NAME} .
+	@cp -R demo/ docker/alpine/demo
+	@cp -R dist/ docker/alpine/dist
+	@cd docker/alpine && \
+	eval ${DOCKER_BINARY} build -t ${DOCKER_IMAGE_NAME} .
+	@rm -rf docker/alpine/{demo,dist}/
 
 run:
 	@eval ${DOCKER_BINARY} run -d -t --name=${DOCKER_CONTAINER_NAME} ${DOCKER_IMAGE_NAME} && \
@@ -41,7 +45,7 @@ connect:
 package:
 	@sed -i 's/    VERSION:.*/    VERSION: ${PLUGIN_VER}/' circle.yml
 	@sed -i 's/pkg_ver =.*/pkg_ver = ${PLUGIN_VER};/' setup.py
-	@sed -i 's/-[0-9]\.[0-9].tar.gz/-${PLUGIN_VER}.tar.gz/;s/"//g;s/ENTRYPOINT.*/ENTRYPOINT \["\/bin\/sh"\]/;' Dockerfile
+	@sed -i 's/-[0-9]\.[0-9].tar.gz/-${PLUGIN_VER}.tar.gz/;s/"//g;s/ENTRYPOINT.*/ENTRYPOINT \["\/bin\/sh"\]/;' docker/alpine/Dockerfile
 	@pandoc --from=markdown --to=rst --output=${PLUGIN_NAME}/README.rst README.md
 	@rm -rf dist/
 	@python setup.py sdist
