@@ -22,10 +22,11 @@ The plugin's data abstraction format is `YAML <http://yaml.org/>`__.
 The plugin requires the presence of two binaries: ``ssh`` and
 ``expect``.
 
-.. figure:: https://github.com/greenpau/ansible-plugin-clicap/tree/master/docs/_static/images/ansible.plugin.clicap.png
-   :alt: Network Automation Worflow
+Workflow Diagram
+----------------
 
-   Plugin Workflow
+|Plugin Workflow|
+
 Getting Started
 ---------------
 
@@ -85,3 +86,5 @@ Please contribute using the following
    :target: https://badge.fury.io/py/ansible-plugin-clicap
 .. |Documentation Status| image:: https://readthedocs.org/projects/ansible-plugin-clicap/badge/?version=latest
    :target: http://ansible-plugin-clicap.readthedocs.io/en/latest/?badge=latest
+.. |Plugin Workflow| image:: https://github.com/greenpau/ansible-plugin-clicap/blob/master/docs/_static/images/ansible.plugin.clicap.png
+   :target: https://github.com/greenpau/ansible-plugin-clicap/blob/master/docs/_static/images/ansible.plugin.clicap.png
