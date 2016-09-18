@@ -1,5 +1,5 @@
 #
-# ansible-pluging-clicap - ansible plugin for collecting (capturing)
+# ansible-plugin-clicap - ansible plugin for collecting (capturing)
 # command-line (cli) output from and interacting with network devices.
 #
 # Author: (c) 2016 Paul Greenberg @greenpau
@@ -53,6 +53,19 @@ class ActionModule(ActionBase):
         self.errors = [];
         self.conf = dict();
         self.info = dict();
+        epoch = time.time();
+        ts = time.gmtime(epoch);
+        self.refs = OrderedDict({
+            'H': 'hostname',
+            'U': os.path.split(os.path.expanduser('~'))[-1],
+            'Y': str(ts.tm_year),
+            'm': str(ts.tm_mon),
+            'd': str(ts.tm_mday),
+            'H': str(ts.tm_hour),
+            'M': str(ts.tm_min),
+            'S': str(ts.tm_sec),
+            'E': str(int(epoch)),
+        });
         self.conf['time_start'] = int(round(time.time() * 1000));
         self.info['return_code'] = 0;
         self.info['return_status'] = 'pending';
@@ -67,8 +80,8 @@ class ActionModule(ActionBase):
         self.conf['output_dir'] = self._task.args.get('output_dir', None);
         if self.conf['output_dir'] is None:
             self.conf['output_dir'] = self._task.args.get('output', None);
-        #if self.conf['output_dir'] is None:
-        #    raise AnsibleError('output_dir parameter is required. it points to the directory containing captured output.');
+        if self.conf['output_dir'] is not None:
+            self.conf['output_dir'] = self._decode_ref(self.conf['output_dir']);
 
         self.ansible_root = task_vars.get('inventory_dir', None);
         if self.ansible_root is None:
@@ -100,6 +113,7 @@ class ActionModule(ActionBase):
         else:
             self.info['host'] = task_vars.get('inventory_hostname_short', None);
             self.errors.append('"identity" task argument contains invalid value: "' + str(self.conf['identity']) + '"');
+        self.refs['H'] = self.info['host'];
         self.info['fqdn'] = task_vars.get('inventory_hostname', None);
         self.info['hostname'] = task_vars.get('inventory_hostname_short', None);
         for i in ['os', 'capabilities', 'host_overwrite', 'host_port', 'host_protocol', 'ssh_proxy', 'ssh_proxy_user']:
@@ -142,6 +156,8 @@ class ActionModule(ActionBase):
                 self.conf['cliset_' + i] = os.path.join(self.conf['cliset_' + i + '_dir'], filename);
                 self._load_cliset(self.conf['cliset_' + i], i);
         else:
+            self.conf['cliset_os_default'] = os.path.join(self.conf['cliset_os_default_dir'], self.info['os'] + '.yml');
+            self._load_cliset(self.conf['cliset_os_default'], 'os_default', commit=False);
             self.conf['cliset_spec'] = self._task.args.get('cliset_spec', None);
             if self.conf['cliset_spec']:
                 if re.match(r'/', self.conf['cliset_spec']):
@@ -460,7 +476,7 @@ class ActionModule(ActionBase):
                             command's output.
                             '''
 
-                            if self.conf['cliset_last_eid'] > 0:
+                            if self.conf['cliset_last_eid'] > 0 and self.conf['cliset_last_eid'] in self.conf['cliset']:
                                 filepath = os.path.join(self.conf['temp_dir'], self.conf['cliset'][self.conf['cliset_last_eid']]['filename']);
                                 self.conf['cliset'][self.conf['cliset_last_eid']]['time_end'] = int(round(time.time() * 1000));
                                 if self.conf['cliset'][self.conf['cliset_last_eid']]['status'] == 'skipped':
@@ -556,11 +572,16 @@ class ActionModule(ActionBase):
     def _parse_cli_output(self, fn, cli_id):
         cli = self.conf['cliset'][cli_id]['cli'];
         self._remove_non_ascii(fn);
+        self.conf['cliset'][cli_id]['lines'] = self._remove_ltr_blanks(fn);
+        if self.conf['cliset'][cli_id]['lines'] == 0 and self.conf['cliset'][cli_id]['allow_empty_response'] == True:
+            return False;
         fc = None;
         lines = [];
         with open(fn) as f:
             fc = [x.rstrip() for x in f.readlines()];
         if not fc:
+            if self.conf['cliset'][cli_id]['allow_empty_response'] == True:
+                return False;
             if self.conf['cliset'][cli_id]['mode'] == 'configure':
                 return False;
             self.errors.append('the \'' + str(cli) + '\' command produced no output');
@@ -639,6 +660,55 @@ class ActionModule(ActionBase):
             f.write(''.join(buffer));
             f.truncate();
         return;
+
+
+    @staticmethod
+    def _remove_ltr_blanks(fn):
+        '''
+        This function removes leading and trailing blank lines from a file.
+        Additionally, it returns the number of lines in the file.
+        The count does not include the leading or trailing blank lines.
+        '''
+        lc = 0;
+        lines = None;
+        with open(fn, 'r') as f:
+            lines = f.readlines();
+        if not lines:
+            return lc;
+        empty_lines = [];
+        for i in [(0, len(lines), 1), (len(lines)-1, -1, -1)]:
+            for j in xrange(i[0], i[1], i[2]):
+                if re.match('^\s*$', lines[j]):
+                    empty_lines.append(j);
+                else:
+                    break;
+        if empty_lines:
+            empty_lines = list(reversed(sorted(empty_lines)));
+            for empty_line in empty_lines:
+                lines.pop(empty_line);
+        if not lines:
+            return lc;
+        with open(fn, 'w') as f:
+            f.write(''.join(lines));
+        return lc;
+
+
+    def _decode_ref(self, s):
+        '''
+        This function translates references to special codes in string variables:
+        - `%H`: Hostname
+        - `%Y`: Year with century as a decimal number
+        - `%m`: Month as a zero-padded decimal number
+        - `%d`: Day of the month as a zero-padded decimal number
+        - `%H`: Hour (24-hour clock) as a zero-padded decimal number
+        - `%M`: Minute as a zero-padded decimal number
+        - `%S`: Second as a zero-padded decimal number
+        - `%E`: Epoch
+        '''
+        for i in self.refs:
+            s = s.replace('%' + i, self.refs[i]);
+        s = s.replace('%', '');
+        return s;
 
 
     def _load_conf(self):
@@ -759,7 +829,7 @@ class ActionModule(ActionBase):
         return credentials;
 
 
-    def _load_cliset(self, fn, src):
+    def _load_cliset(self, fn, src, commit=True):
         if not os.path.exists(fn):
             return;
         if not os.path.isfile(fn):
@@ -788,14 +858,14 @@ class ActionModule(ActionBase):
                 self.errors.append('the ' + self.plugin_name + ' data from ' + str(f) + ' is not a list of dictionaries.');
                 return;
             required_keys = ['cli'];
-            optional_keys = ['capability', 'tags', 'paging', 'format', 'scripting', 'mode'];
+            optional_keys = ['capability', 'tags', 'paging', 'format', 'scripting', 'mode', 'pre', 'post', 'saveas'];
             for k in required_keys:
                 if k not in entry:
-                    self.errors.append('failed to find mandatory field  \'' + k + '\' in ' + str(entry) + ' in ' + f);
+                    self.errors.append('failed to find mandatory field  \'' + str(k) + '\' in ' + str(entry) + ' in ' + str(f));
                     continue;
             for k in entry:
                 if k not in optional_keys and k not in required_keys:
-                    self.errors.append('the \'' + k  + '\' field in ' + str(entry) + ' in ' + f + ' is unsupported');
+                    self.errors.append('the \'' + str(k)  + '\' field in ' + str(entry) + ' in ' + str(f) + ' is unsupported');
                     continue;
                 if k in ['paging', 'scripting']:
                     self.conf[k] = entry[k];
@@ -806,9 +876,13 @@ class ActionModule(ActionBase):
                         for t in entry[k]:
                             entry_tags.append(t);
                     else:
-                        self.errors.append('the handling of \'' + k  + '\' field of ' + str(type(entry[k])) + ' type in ' + str(entry) + ' in ' + f + ' is unsupported');
+                        self.errors.append('the handling of \'' + k  + '\' field of ' + str(type(entry[k])) + ' type in ' + str(entry) + ' in ' + str(f) + ' is unsupported');
                 else:
                     pass;
+
+            if not commit:
+                continue;
+
             entry_mode = None;
             if 'mode' in entry:
                 if entry['mode'] not in ['analytics', 'configure']:
@@ -832,10 +906,27 @@ class ActionModule(ActionBase):
                         if self.conf['cliset'][c]['mode'] != entry_mode:
                             if entry_mode == 'noop' or self.conf['cliset'][c]['mode'] == 'noop':
                                 continue;
-                            self.errors.append('the plugin does not support the mixing of \'configure\' and \'analytics\' modes');
+                            self.errors.append('the plugin does not support the mixing of \'configure\' and \'analytics\' modes in the same run');
                             return;
             if _is_duplicate_cli:
                 continue;
+
+            if 'pre' in entry:
+                entry_tasks_pre = filter(lambda x: len(x) > 0, entry['pre'].split('\n'));
+                for entry_task in entry_tasks_pre:
+                    if entry_task.strip() == '':
+                        continue;
+                    self.conf['cliset_last_id'] += 1;
+                    self.conf['cliset'][self.conf['cliset_last_id']] = {
+                        'format': 'txt',
+                        'filename': 'response.' + str(self.conf['cliset_last_id']) + '.txt',
+                        'source': 'src',
+                        'cli': entry_task,
+                        'mode': 'pre',
+                        'status': 'unknown',
+                        'allow_empty_response': True,
+                    };
+
             entry_tasks = entry['cli'].split('\n');
             for entry_task in entry_tasks:
                 if entry_task.strip() == "":
@@ -846,11 +937,11 @@ class ActionModule(ActionBase):
                     self.conf['cliset'][self.conf['cliset_last_id']]['format'] = entry['format'];
                 else:
                     self.conf['cliset'][self.conf['cliset_last_id']]['format'] = 'txt';
-                if 'filename' in entry:
-                    self.conf['cliset'][self.conf['cliset_last_id']]['filename'] = entry['filename'];
+                if 'saveas' in entry:
+                    self.conf['cliset'][self.conf['cliset_last_id']]['filename'] = self._decode_ref(entry['saveas']);
                 else:
                     if entry_mode == 'configure':
-                        self.conf['cliset'][self.conf['cliset_last_id']]['filename'] = 'response.txt';
+                        self.conf['cliset'][self.conf['cliset_last_id']]['filename'] = 'response.' + str(self.conf['cliset_last_id']) + '.txt';
                     else:
                         entry_filename = self._get_filename_from_cli(self.info['host'], entry_task, self.conf['cliset'][self.conf['cliset_last_id']]['format']);
                         self.conf['cliset'][self.conf['cliset_last_id']]['filename'] = entry_filename;
@@ -858,6 +949,7 @@ class ActionModule(ActionBase):
                 self.conf['cliset'][self.conf['cliset_last_id']]['cli'] = entry_task;
                 self.conf['cliset'][self.conf['cliset_last_id']]['mode'] = entry_mode;
                 self.conf['cliset'][self.conf['cliset_last_id']]['status'] = 'unknown';
+                self.conf['cliset'][self.conf['cliset_last_id']]['allow_empty_response'] = False;
                 if entry_tags:
                     self.conf['cliset'][self.conf['cliset_last_id']]['tags'] = entry_tags;
                 if 'exceptions' in self.conf and entry_mode == 'analytics':
@@ -865,6 +957,23 @@ class ActionModule(ActionBase):
                         if re.match(r['hosts'], self.info['host']) and re.match(r['cli'], entry_task):
                             self.conf['cliset'][self.conf['cliset_last_id']]['status'] = 'skipped';
                             self.conf['cliset'][self.conf['cliset_last_id']]['mode'] = 'noop';
+
+            if 'post' in entry:
+                entry_post_tasks = filter(lambda x: len(x) > 0, entry['post'].split('\n'));
+                for entry_task in entry_post_tasks:
+                    if entry_task.strip() == '':
+                        continue;
+                    self.conf['cliset_last_id'] += 1;
+                    self.conf['cliset'][self.conf['cliset_last_id']] = {
+                        'format': 'txt',
+                        'filename': 'response.' + str(self.conf['cliset_last_id']) + '.txt',
+                        'source': 'src',
+                        'cli': entry_task,
+                        'mode': 'post',
+                        'status': 'unknown',
+                        'allow_empty_response': True,
+                    };
+
             for t in entry_tags:
                 if t in ['version', 'configuration'] and 'cli' in entry:
                     self.conf[t] = entry['cli'];
@@ -913,7 +1022,7 @@ class ActionModule(ActionBase):
             r.append('    <testcase name="' + tc_name  + '" time="' + str(tc_time) + '">');
             r.append('      <system-out>');
             r.append('        <![CDATA[');
-            for p in ['mode', 'format', 'filename', 'path', 'sha1', 'sha1_pre', 'source', 'tags']:
+            for p in ['mode', 'format', 'path', 'sha1', 'sha1_pre', 'source', 'tags', 'pre', 'post', 'saveas', 'lines']:
                 if p in h:
                     #r.append('          ' + p + ': ' + str(h[p]));
                     r.append(p + ': ' + str(h[p]));

@@ -7,7 +7,5 @@
   vars_files:
     - "~/.clicap.vault.yml"
   tasks:
-  - name: gather datestamp
-    set_fact: datestamp="{{lookup('pipe','date +%Y%m%d')}}"
   - name: collect the output of all relevant operating system commands
-    action: clicap output=/tmp/clicap-{{ datestamp }} no_host_key_check=yes on_error=continue
+    action: clicap output="/tmp/clicap-%Y%m%d" no_host_key_check=yes on_error=continue

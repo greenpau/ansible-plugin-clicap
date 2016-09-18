@@ -2,7 +2,7 @@
 
 [![CircleCI](https://circleci.com/gh/greenpau/ansible-plugin-clicap.svg?style=svg)](https://circleci.com/gh/greenpau/ansible-plugin-clicap)
 [![PyPI version](https://badge.fury.io/py/ansible-plugin-clicap.png)](https://badge.fury.io/py/ansible-plugin-clicap)
-[![Documentation Status](https://readthedocs.org/projects/ansible-plugin-clicap/badge/?version=latest)](http://ansible-plugin-clicap.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/ansible-plugin-clicap/badge/?version=latest)](http://ansible-plugin-clicap.readthedocs.io/)
 
 Network automation plugin for Ansible.
 

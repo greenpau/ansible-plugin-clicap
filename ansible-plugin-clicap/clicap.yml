@@ -39,6 +39,7 @@ output_filter_remove:
 - '! NVRAM config last updated'
 - '\s+Done'
 - 'Do you want to mask the password'
+- '^\[edit\]'
 
 output_filter_replace:
 - regex:
@@ -62,6 +63,9 @@ output_errors:
 - regex:
   - "WARNING:"
   msg: "command resulting in warning"
+- regex:
+  - "ERROR"
+  msg: "command resulting in error"
 - regex:
   - "[Ss]yntax error"
   - "[Ii]nvalid [Ss]yntax"

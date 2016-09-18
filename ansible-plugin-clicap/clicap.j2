@@ -27,6 +27,8 @@ set password_enable "";
 set connection_string "{{ connection_string }}";
 set session_authenticated 0;
 set session_authentication_failed 0;
+set session_open 0;
+set session_logout_attempt 0;
 set paging_mode_on {{ paging_mode_on }};
 set paging_mode_cli "{{ paging_mode_cli }}";
 set scripting_mode_on {{ scripting_mode_on }};
@@ -156,10 +158,19 @@ proc parse_cli_prompt {cli_output req} {
 }
 
 proc get_optional_prompt {prompt} {
-  set prompt_end [string index $prompt end];
-  set prompt_start [string trim $prompt $prompt_end];
-  set prompt_vars "(\\S+)";
-  return $prompt_start$prompt_vars$prompt_end;
+  global host_operating_system;
+  set prompt [string trimright $prompt " "];
+  if { $host_operating_system == "paloalto_panos" } {
+    set prompt_end [string index $prompt end];
+    set prompt_start [string trim $prompt $prompt_end];
+    set prompt_end "#";
+    return $prompt_start$prompt_end;
+  } else {
+    set prompt_end [string index $prompt end];
+    set prompt_start [string trim $prompt $prompt_end];
+    set prompt_vars "(\\S+)";
+    return $prompt_start$prompt_vars$prompt_end;
+  }
 }
 
 puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' controller='$controller'\
@@ -187,6 +198,11 @@ while {1} {
     }
     eof {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_CONNECTION_FAILED msg='failed to connect'";
+
+ADD RECORDING of why failed!!!
+
+
+
       exit $ERROR_CONNECTION_FAILED;
     }
     -re "RSA key fingerprint.*you sure you want to continue connecting" {
@@ -310,6 +326,7 @@ while {1} {
   }
 }
 
+set session_open 1;
 set timeout 7;
 
 if { $paging_mode_on == 1 } {
@@ -322,6 +339,8 @@ if { $paging_mode_on == 1 } {
     }
     -regexp "$prompt" {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='disabled paging successfully'";
+      expect -re "\r\n|\n|\r";
+      expect -re $;
     }
   }
 }
@@ -335,6 +354,8 @@ if { $scripting_mode_on == 1 } {
     }
     -regexp "$prompt" {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='enabled scripting mode successfully'";
+      expect -re "\r\n|\n|\r";
+      expect -re $;
     }
   }
 }
@@ -347,20 +368,33 @@ while {1} {
   set clitask [get_cli_task "clitask"];
   set clifile [get_cli_task "clifile"];
   set climode [get_cli_task "climode"];
+  set rwmode "w";
   set clilines 0;
   if { $clitask == "" || $clitask == "eol" } {
     puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='received end of task list'";
-    break;
+    if { $session_open > 0 } {
+      if { $session_logout_attempt > 6 } {
+        break;
+      }
+      puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='logging out'";
+      set clitask "exit";
+      set clifile "logout.txt";
+      set climode "post";
+      set rwmode "a";
+      incr session_logout_attempt;
+    } else {
+      break;
+    }
   } else {
     puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli task: $clitask'";
-    puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli output filename: $clifile'";
+    puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli output filename ($rwmode): $clifile'";
     puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='cli mode: $climode'";
     if { $climode == "noop" } {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='skipped the above task";
       continue;
     }
   }
-  set fh [open "$session_dir/$clifile" "w"];
+  set fh [open "$session_dir/$clifile" "$rwmode"];
   if { $host_operating_system == "brocade_serveriron" || $host_operating_system == "paloalto_panos" } {
     send -h "\x0d\x0a";
   }
@@ -370,6 +404,14 @@ while {1} {
   set expect_out(buffer) {};
   while 1 {
     expect {
+      eof {
+        puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='spawned process exited'";
+        set cli_output [parse_cli "$expect_out(buffer)"];
+        puts -nonewline $fh $cli_output;
+        set expect_out(buffer) {};
+        set session_open 0;
+        break;
+      }
       default {
         puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='expect defaulted'";
         set cli_output [parse_cli "$expect_out(buffer)"];
@@ -427,7 +469,6 @@ while {1} {
   close $fh;
 }
 
-send -h "exit\n";
 puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='finished command batch execution' rc=0";
 stty sane;
 exit 0;

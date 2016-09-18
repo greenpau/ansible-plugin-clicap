@@ -9,7 +9,7 @@ import re;
 import stat;
 
 pkg_name = 'ansible-plugin-clicap';
-pkg_ver = "0.4";
+pkg_ver = '0.5';
 
 def _load_test_suite():
     test_loader = unittest.TestLoader();

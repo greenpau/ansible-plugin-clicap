@@ -12,4 +12,4 @@
             no_host_key_check=yes
             disable_defaults=yes
             on_error=continue
-            cliset_spec=files/clicap/spec/{{ inventory_hostname_short }}.yml
+            cliset_spec=files/clicap/spec/{{ inventory_hostname_short }}.acl.yml

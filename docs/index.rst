@@ -1,24 +1,27 @@
-ansible-plugin-clicap
-=====================
+.. index::
+   single: Table of Contents
 
-Ansible plugin for collecting (capturing) command-line (cli) output from
-and interacting with network devices.
+==================================
+clicap - Network Automation Plugin
+==================================
 
-|CircleCI| |PyPiVersion|
+|CircleCI| |PyPI version| |Documentation Status|
 
 Table of Contents:
 
 .. toctree::
-      :maxdepth: 2
+   :maxdepth: 3
 
+   intro
+   usage
+   auth
+   faqs
 
-Indices and Tables
-==================
-
-* :ref:`genindex`
-* :ref:`search`
+.. include:: intro.rst
 
 .. |CircleCI| image:: https://circleci.com/gh/greenpau/ansible-plugin-clicap.svg?style=svg
          :target: https://circleci.com/gh/greenpau/ansible-plugin-clicap
-.. |PyPiVersion| image:: https://badge.fury.io/py/ansible-plugin-clicap.png
+.. |PyPi version| image:: https://badge.fury.io/py/ansible-plugin-clicap.png
          :target: https://badge.fury.io/py/ansible-plugin-clicap
+.. |Documentation Status| image:: https://readthedocs.org/projects/ansible-plugin-clicap/badge/?version=latest
+         :target: http://ansible-plugin-clicap.readthedocs.io/

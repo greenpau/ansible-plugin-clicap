@@ -1,0 +1,16 @@
+---
+- hosts:
+  - ny-fw01
+  gather_facts: no
+  vars:
+    ansible_connection: local
+  vars_files:
+    - "~/.clicap.vault.yml"
+  tasks:
+  - name: collect firewall configuration
+    action: clicap
+            no_host_key_check=yes
+            disable_defaults=yes
+            on_error=continue
+            cliset_spec=files/clicap/spec/{{ inventory_hostname_short }}.config.yml
+            output_dir="/tmp/clicap-%Y%m%d"

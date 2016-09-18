@@ -85,6 +85,6 @@ Please contribute using the following
 .. |PyPI version| image:: https://badge.fury.io/py/ansible-plugin-clicap.png
    :target: https://badge.fury.io/py/ansible-plugin-clicap
 .. |Documentation Status| image:: https://readthedocs.org/projects/ansible-plugin-clicap/badge/?version=latest
-   :target: http://ansible-plugin-clicap.readthedocs.io/en/latest/?badge=latest
-.. |Plugin Workflow| image:: https://github.com/greenpau/ansible-plugin-clicap/blob/master/docs/_static/images/ansible.plugin.clicap.png
-   :target: https://github.com/greenpau/ansible-plugin-clicap/blob/master/docs/_static/images/ansible.plugin.clicap.png
+   :target: http://ansible-plugin-clicap.readthedocs.io/
+.. |Plugin Workflow| image:: https://raw.githubusercontent.com/greenpau/ansible-plugin-clicap/master/docs/_static/images/ansible.plugin.clicap.png
+   :target: https://raw.githubusercontent.com/greenpau/ansible-plugin-clicap/master/docs/_static/images/ansible.plugin.clicap.png

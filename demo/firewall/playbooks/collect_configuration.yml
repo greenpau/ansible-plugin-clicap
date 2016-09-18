@@ -7,7 +7,5 @@
   vars_files:
     - "~/.clicap.vault.yml"
   tasks:
-  - name: gather datestamp
-    set_fact: datestamp="{{lookup('pipe','date +%Y%m%d')}}"
   - name: collect running configuration only
-    action: clicap output=/tmp/clicap-{{ datestamp }} gather_config=yes
+    action: clicap output="/tmp/clicap-%Y%m%d" gather_config=yes

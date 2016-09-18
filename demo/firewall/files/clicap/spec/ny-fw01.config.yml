@@ -1,0 +1,6 @@
+---
+clicap:
+- cli: |
+    show running-config
+  saveas: '%U.%H.config'
+  mode: analytics

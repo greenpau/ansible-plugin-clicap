@@ -1,0 +1,15 @@
+---
+- hosts:
+  - ny-fw04
+  gather_facts: no
+  vars:
+    ansible_connection: local
+  vars_files:
+    - "~/.clicap.vault.yml"
+  tasks:
+  - name: collect Palo Alto running configuration in set format
+    action: clicap
+            no_host_key_check=yes
+            disable_defaults=yes
+            on_error=continue
+            cliset_spec=files/clicap/spec/{{ inventory_hostname_short }}.yml
