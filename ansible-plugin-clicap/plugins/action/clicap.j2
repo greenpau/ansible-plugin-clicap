@@ -20,7 +20,7 @@ set host "{{ host }}";
 set controller "{{ controller }}";
 set plugin "{{ plugin }}";
 set host_operating_system "{{ operating_system }}";
-set transaction_id "{{ uid }}";
+set transaction_id "{{ upid }}";
 set username "";
 set password "";
 set password_enable "";
@@ -187,6 +187,8 @@ spawn {{ connection_string }};
 set session_pid [exp_pid];
 puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='pid: $session_pid'";
 
+set session_connect [open "$session_dir/$host.connect.txt" "a"];
+
 match_max -d 600000000;
 
 while {1} {
@@ -194,35 +196,44 @@ while {1} {
     timeout {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' \
                          rc=$ERROR_CONNECTION_TIMEOUT timeout_interval=$timeout msg='failed to connect due to timeout'";
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      puts $session_connect $cli_output;
+      close $session_connect;
+      set expect_out(buffer) {};
       exit $ERROR_CONNECTION_TIMEOUT;
     }
     eof {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_CONNECTION_FAILED msg='failed to connect'";
-
-ADD RECORDING of why failed!!!
-
-
-
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      puts $session_connect $cli_output;
+      close $session_connect;
+      set expect_out(buffer) {};
       exit $ERROR_CONNECTION_FAILED;
     }
     -re "RSA key fingerprint.*you sure you want to continue connecting" {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_UNKNOWN_SSH_FINGERPRINT \
                         msg='SSH Host Key Checking is enabled, but received unknown SSH fingerprint'";
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      puts $session_connect $cli_output;
+      close $session_connect;
+      set expect_out(buffer) {};
       exit $ERROR_UNKNOWN_SSH_FINGERPRINT;
     }
     "Name or service not known" {
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_DNS_RESOLUTION_FAILED \
                          msg='failed to connect due to failed dns resolution'";
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      puts $session_connect $cli_output;
+      close $session_connect;
+      set expect_out(buffer) {};
       exit $ERROR_DNS_RESOLUTION_FAILED;
     }
     -regexp {[Uu]ser\s?[Nn]ame:\s?$} {
       set cli_output [parse_cli "$expect_out(buffer)"];
-      set last_response [open "$session_dir/last_response.txt" "a"];
-      set auth_response [open "$session_dir/auth_response.txt" "a"];
+      set last_response [open "$session_dir/$host.last_response.txt" "w"];
       puts $last_response $cli_output;
-      puts $auth_response $cli_output;
       close $last_response;
-      close $auth_response;
+      puts $session_connect $cli_output;
       set expect_out(buffer) {};
       if { $session_authenticated > 0 } {
         puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='prompted for Privileged EXEC mode username'";
@@ -240,12 +251,10 @@ ADD RECORDING of why failed!!!
     }
     -regexp {[Pp]assword:\s?$} {
       set cli_output [parse_cli "$expect_out(buffer)"];
-      set last_response [open "$session_dir/last_response.txt" "w"];
-      set auth_response [open "$session_dir/auth_response.txt" "a"];
+      set last_response [open "$session_dir/$host.last_response.txt" "w"];
       puts $last_response $cli_output;
-      puts $auth_response $cli_output;
       close $last_response;
-      close $auth_response;
+      puts $session_connect $cli_output;
       set expect_out(buffer) {};
       if { $session_authenticated > 0 } {
         if { $session_authentication_failed > 0 } {
@@ -272,12 +281,10 @@ ADD RECORDING of why failed!!!
     }
     -regexp {>\s?$} {
       set cli_output [parse_cli "$expect_out(buffer)"];
-      set last_response [open "$session_dir/last_response.txt" "w"];
-      set auth_response [open "$session_dir/auth_response.txt" "a"];
+      set last_response [open "$session_dir/$host.last_response.txt" "w"];
       puts $last_response $cli_output;
-      puts $auth_response $cli_output;
       close $last_response;
-      close $auth_response;
+      puts $session_connect $cli_output;
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='authenticated successfully'";
       if { $host_operating_system == "paloalto_panos" || $host_operating_system == "junos_qfx" || $host_operating_system == "junos_srx" || \
            $host_operating_system == "citrix_netscaler" || $host_operating_system == "generic_linux" || \
@@ -302,6 +309,7 @@ ADD RECORDING of why failed!!!
         set hostname [parse_cli_prompt "$expect_out(buffer)" "hostname"];
         puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected prompt <<$prompt>>'";
         puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected hostname <<$hostname>>'";
+        set expect_out(buffer) {};
         break;
       }
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in User EXEC mode'";
@@ -314,6 +322,11 @@ ADD RECORDING of why failed!!!
       }
     }
     -regexp {[#]\s?$} {
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      set last_response [open "$session_dir/$host.last_response.txt" "w"];
+      puts $last_response $cli_output;
+      close $last_response;
+      puts $session_connect $cli_output;
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='authenticated successfully'";
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='currently in Privileged EXEC mode'";
       incr session_authenticated;
@@ -321,6 +334,7 @@ ADD RECORDING of why failed!!!
       set hostname [parse_cli_prompt "$expect_out(buffer)" "hostname"];
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected prompt <<$prompt>>'";
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='detected hostname <<$hostname>>'";
+      set expect_out(buffer) {};
       break;
     }
   }
@@ -334,10 +348,20 @@ if { $paging_mode_on == 1 } {
   send -h "$paging_mode_cli\n";
   expect {
     default {
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      puts $session_connect $cli_output;
+      close $session_connect;
+      set expect_out(buffer) {};
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_PAGING_OFF_FAILED msg='failed to disable paging'";
       exit $ERROR_PAGING_OFF_FAILED;
     }
     -regexp "$prompt" {
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      set last_response [open "$session_dir/$host.last_response.txt" "w"];
+      puts $last_response $cli_output;
+      close $last_response;
+      puts $session_connect $cli_output;
+      set expect_out(buffer) {};
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='disabled paging successfully'";
       expect -re "\r\n|\n|\r";
       expect -re $;
@@ -349,16 +373,28 @@ if { $scripting_mode_on == 1 } {
   send -h "$scripting_mode_cli\n";
   expect {
     default {
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      puts $session_connect $cli_output;
+      close $session_connect;
+      set expect_out(buffer) {};
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' rc=$ERROR_SCRIPTING_ON_FAILED msg='failed to enable scripting mode'";
       exit $ERROR_SCRIPTING_ON_FAILED;
     }
     -regexp "$prompt" {
+      set cli_output [parse_cli "$expect_out(buffer)"];
+      set last_response [open "$session_dir/$host.last_response.txt" "w"];
+      puts $last_response $cli_output;
+      close $last_response;
+      puts $session_connect $cli_output;
+      set expect_out(buffer) {};
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='enabled scripting mode successfully'";
       expect -re "\r\n|\n|\r";
       expect -re $;
     }
   }
 }
+
+close $session_connect;
 
 set cli_prompt "$prompt";
 set cli_prompt_extended [get_optional_prompt "$prompt"];
@@ -378,7 +414,7 @@ while {1} {
       }
       puts $session_log "timestamp='[exec date]' transaction_id='$transaction_id' msg='logging out'";
       set clitask "exit";
-      set clifile "logout.txt";
+      set clifile "$host.logout.txt";
       set climode "post";
       set rwmode "a";
       incr session_logout_attempt;

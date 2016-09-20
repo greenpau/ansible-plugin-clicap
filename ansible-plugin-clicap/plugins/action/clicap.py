@@ -1,4 +1,3 @@
-#
 # ansible-plugin-clicap - ansible plugin for collecting (capturing)
 # command-line (cli) output from and interacting with network devices.
 #
@@ -56,7 +55,8 @@ class ActionModule(ActionBase):
         epoch = time.time();
         ts = time.gmtime(epoch);
         self.refs = OrderedDict({
-            'H': 'hostname',
+            'h': 'hostname',
+            'p': 'unique_process_id',
             'U': os.path.split(os.path.expanduser('~'))[-1],
             'Y': str(ts.tm_year),
             'm': str(ts.tm_mon),
@@ -113,7 +113,9 @@ class ActionModule(ActionBase):
         else:
             self.info['host'] = task_vars.get('inventory_hostname_short', None);
             self.errors.append('"identity" task argument contains invalid value: "' + str(self.conf['identity']) + '"');
-        self.refs['H'] = self.info['host'];
+        self.refs['h'] = self.info['host'];
+        self.conf['upid'] = self._task.args.get('upid', str(uuid.uuid1()));
+        self.refs['p'] = self.conf['upid'];
         self.info['fqdn'] = task_vars.get('inventory_hostname', None);
         self.info['hostname'] = task_vars.get('inventory_hostname_short', None);
         for i in ['os', 'capabilities', 'host_overwrite', 'host_port', 'host_protocol', 'ssh_proxy', 'ssh_proxy_user']:
@@ -172,7 +174,8 @@ class ActionModule(ActionBase):
         Create a temporary directory for command-line output.
         '''
 
-        self.conf['temp_dir'] = os.path.join(os.getenv("HOME"), '.ansible', 'tmp', self.plugin_name, datetime.datetime.now().strftime("%Y/%m/%d"), str(os.getppid()), self.info['host']);
+        #self.conf['temp_dir'] = os.path.join(os.getenv("HOME"), '.ansible', 'tmp', self.plugin_name, datetime.datetime.now().strftime("%Y/%m/%d"), str(os.getppid()), self.info['host']);
+        self.conf['temp_dir'] = os.path.join(os.getenv("HOME"), '.ansible', 'tmp', self.plugin_name, self.conf['upid'], self.info['host']);
         try:
             os.makedirs(self.conf['temp_dir']);
         except OSError as exception:
@@ -227,8 +230,14 @@ class ActionModule(ActionBase):
             if self.conf['cliset_last_id'] == 0:
                 display.display('<' + self.info['host'] + '> no cli commands found', color='yellow');
                 self.info['return_status'] = 'failed';
+                self.conf['logged_in'] = 'failed';
             else:
+                '''
+                Connect to a remote device.
+                '''
                 self._remote_play();
+        else:
+            self.conf['logged_in'] = 'failed';
 
         if self.errors:
             if self.info['return_code'] == 0:
@@ -261,14 +270,13 @@ class ActionModule(ActionBase):
                 result['msg'] = 'failed ' + ','.join(_failed_cli);
                 result['failed'] = True;
             else:
-                if 'output_dir' in self.conf:
-                    self._commit();
-                else:
+                if 'output_dir' not in self.conf:
                     display.display('<' + self.info['host'] + '> review "' + self.conf['temp_dir'] + '" directory for details', color='green');
                 if 'changed' in self.info:
                     result['changed'] = True;
                 result['ok'] = True;
 
+        self._commit();
         self.conf['time_end'] = int(round(time.time() * 1000));
         display.vvv('plugin configuration:\n' + json.dumps(self.conf, indent=4, sort_keys=True), host=self.info['host']);
         self._report();
@@ -354,7 +362,7 @@ class ActionModule(ActionBase):
             'operating_system': self.info['os'],
             'controller': 'master',
             'plugin': self.plugin_name,
-            'uid': str(uuid.uuid1()),
+            'upid': self.conf['upid'],
             'connection_string': ' '.join(self.conf['args']),
             'stdout_file_name': self.conf['stdout'],
             'log_dir': self.conf['temp_dir'],
@@ -475,7 +483,6 @@ class ActionModule(ActionBase):
                             check the result of the command's execution by looking at the
                             command's output.
                             '''
-
                             if self.conf['cliset_last_eid'] > 0 and self.conf['cliset_last_eid'] in self.conf['cliset']:
                                 filepath = os.path.join(self.conf['temp_dir'], self.conf['cliset'][self.conf['cliset_last_eid']]['filename']);
                                 self.conf['cliset'][self.conf['cliset_last_eid']]['time_end'] = int(round(time.time() * 1000));
@@ -491,12 +498,12 @@ class ActionModule(ActionBase):
                                         display.display('<' + self.info['host'] + '> completed running "' + self.conf['cliset'][self.conf['cliset_last_eid']]['cli'] + \
                                                         '" command: fail', color='red');
                                     else:
+                                        self.conf['cliset'][self.conf['cliset_last_eid']]['status'] = 'ok';
                                         display.display('<' + self.info['host'] + '> completed running "' + self.conf['cliset'][self.conf['cliset_last_eid']]['cli'] + \
                                                         '" command: ok', color='green');
                                         if self.conf['cliset'][self.conf['cliset_last_eid']]['mode'] == 'analytics':
                                             self.conf['cliset'][self.conf['cliset_last_eid']]['sha1'] = self._get_sha1_hash(filepath);
                                             self.conf['cliset'][self.conf['cliset_last_eid']]['path'] = filepath;
-
                             '''
                             check for the commands pending execution on a remote device.
                             '''
@@ -545,6 +552,10 @@ class ActionModule(ActionBase):
             except:
                 self.errors.append('<' + self.info['host'] + '> an attempt by ' + self.plugin_name + ' plugin to communicate to its child process failed.');
                 self.errors.append('<' + self.info['host'] + '> ' + traceback.format_exc());
+
+        if 'return_code' in self.info:
+            if self.info['return_code'] >= 64:
+                self.conf['logged_in'] = 'failed';
         return;
 
 
@@ -553,7 +564,12 @@ class ActionModule(ActionBase):
         if 'cliset_last_eid' not in self.conf:
             return 'eol';
         if item == 'task':
-            self.conf['cliset_last_eid'] += 1;
+            while True:
+                self.conf['cliset_last_eid'] += 1;
+                if self.conf['cliset_last_eid'] not in self.conf['cliset']:
+                    break;
+                if self.conf['cliset'][self.conf['cliset_last_eid']]['status'] not in ['conditional']:
+                    break;
         if self.conf['cliset_last_eid'] not in self.conf['cliset']:
             return 'eol';
         if self.conf['abort']:
@@ -594,9 +610,26 @@ class ActionModule(ActionBase):
             os.chmod(fn, stat.S_IRUSR | stat.S_IWUSR);
         except:
             self.conf['cliset'][cli_id]['status'] = 'failed';
-            self.conf['cliset'][cli_id]['error_msg'] = traceback.format_exc();
+            self.conf['cliset'][cli_id]['system_err'] = traceback.format_exc();
             self.errors.append('<' + self.info['host'] + '> ' + traceback.format_exc());
             return True;
+        '''
+        Check whether the file is a configuration file and act accordingly.
+        '''
+        if 'tags' in self.conf['cliset'][cli_id]:
+            if 'configuration' in self.conf['cliset'][cli_id]['tags']:
+                #display.display('<' + self.info['host'] + '> configuration file detected', color='red');
+                for i in self.conf['cliset']:
+                    if self.conf['cliset'][i]['status'] == 'conditional':
+                        #display.display('<' + self.info['host'] + '> conditional: ' + self.conf['cliset'][i]['cli'], color='red');
+                        if 'conditions-match-any' in self.conf['cliset'][i]:
+                            for line in fc:
+                                for c in self.conf['cliset'][i]['conditions-match-any']:
+                                    if re.search(c, line):
+                                        self.conf['cliset'][i]['status'] = 'unknown';
+                                        break;
+                                if self.conf['cliset'][i]['status'] == 'unknown':
+                                    break;
         '''
         Parse for errors and filter output prior to saving it.
         '''
@@ -615,10 +648,10 @@ class ActionModule(ActionBase):
                                     _is_exempt = True;
                         if not _is_exempt:
                             self.errors.append('\'' + str(cli) + '\' command failed due to ' + err['msg']);
-                            if 'error_msg' not in self.conf['cliset'][cli_id]:
-                                self.conf['cliset'][cli_id]['error_msg'] = [];
+                            if 'system_err' not in self.conf['cliset'][cli_id]:
+                                self.conf['cliset'][cli_id]['system_err'] = [];
                             self.conf['cliset'][cli_id]['status'] = 'failed';
-                            self.conf['cliset'][cli_id]['error_msg'].append(fc);
+                            self.conf['cliset'][cli_id]['system_err'].extend(fc);
                             return True;
             _is_removed = False;
             for flt in self.conf['output_filter_remove']:
@@ -643,8 +676,8 @@ class ActionModule(ActionBase):
                 lines.append(line);
         with open(fn, 'w') as f:
             f.write('\n'.join(lines) + '\n');
-        if self.conf['cliset'][cli_id]['mode'] == 'configure':
-            self.conf['cliset'][cli_id]['status_msg'] = '\n'.join(lines) + '\n';
+        if self.conf['cliset'][cli_id]['mode'] != 'analytics':
+            self.conf['cliset'][cli_id]['system_out'] = '\n'.join(lines) + '\n';
         return False;
 
 
@@ -679,7 +712,8 @@ class ActionModule(ActionBase):
         for i in [(0, len(lines), 1), (len(lines)-1, -1, -1)]:
             for j in xrange(i[0], i[1], i[2]):
                 if re.match('^\s*$', lines[j]):
-                    empty_lines.append(j);
+                    if j not in empty_lines:
+                        empty_lines.append(j);
                 else:
                     break;
         if empty_lines:
@@ -690,7 +724,7 @@ class ActionModule(ActionBase):
             return lc;
         with open(fn, 'w') as f:
             f.write(''.join(lines));
-        return lc;
+        return len(lines);
 
 
     def _decode_ref(self, s):
@@ -858,7 +892,7 @@ class ActionModule(ActionBase):
                 self.errors.append('the ' + self.plugin_name + ' data from ' + str(f) + ' is not a list of dictionaries.');
                 return;
             required_keys = ['cli'];
-            optional_keys = ['capability', 'tags', 'paging', 'format', 'scripting', 'mode', 'pre', 'post', 'saveas'];
+            optional_keys = ['capability', 'tags', 'paging', 'format', 'scripting', 'mode', 'pre', 'post', 'saveas', 'conditions-match-any', 'conditions-match-all'];
             for k in required_keys:
                 if k not in entry:
                     self.errors.append('failed to find mandatory field  \'' + str(k) + '\' in ' + str(entry) + ' in ' + str(f));
@@ -948,7 +982,13 @@ class ActionModule(ActionBase):
                 self.conf['cliset'][self.conf['cliset_last_id']]['source'] = src;
                 self.conf['cliset'][self.conf['cliset_last_id']]['cli'] = entry_task;
                 self.conf['cliset'][self.conf['cliset_last_id']]['mode'] = entry_mode;
-                self.conf['cliset'][self.conf['cliset_last_id']]['status'] = 'unknown';
+                if 'conditions-match-any' in entry or 'conditions-match-all' in entry:
+                    self.conf['cliset'][self.conf['cliset_last_id']]['status'] = 'conditional';
+                    for c in ['conditions-match-any', 'conditions-match-all']:
+                        if c in entry:
+                            self.conf['cliset'][self.conf['cliset_last_id']][c] = entry[c];
+                else:
+                    self.conf['cliset'][self.conf['cliset_last_id']]['status'] = 'unknown';
                 self.conf['cliset'][self.conf['cliset_last_id']]['allow_empty_response'] = False;
                 if entry_tags:
                     self.conf['cliset'][self.conf['cliset_last_id']]['tags'] = entry_tags;
@@ -982,12 +1022,75 @@ class ActionModule(ActionBase):
 
     def _report(self):
         '''
-        This function creates JUnit report for each of the hosts in a run.
+        This function creates JUnit report and metadata YAML file for each of the hosts in a run.
         '''
         if 'cliset' not in self.conf:
             return;
-        r = ['<?xml version="1.0" encoding="UTF-8"?>'];
-        r.append('<testsuites>');
+        if self._play_context.check_mode:
+            self.conf['logged_in'] = 'skipped';
+        if 'logged_in' not in self.conf:
+            self.conf['logged_in'] = 'failed';
+        r = {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 9: []};
+        r[0].append('<?xml version="1.0" encoding="UTF-8"?>');
+        m = {'conf': self.info, 'cliset': {}};
+        r[0].append('<testsuites>');
+        r[9].append('</testsuites>');
+        '''
+        Gather information about initial connection and logout.
+        '''
+        for stage in ['connect', 'logout']:
+            fp = os.path.join(self.conf['temp_dir'], self.info['host'] + '.' + stage + '.txt');
+            fs = None;
+            fst = {'errors': 0, 'skipped': 0, 'tests': 1, 'failures': 0};
+
+            if self.conf['logged_in'] == 'skipped':
+                fst['skipped'] = 1;
+            elif self.conf['logged_in'] == 'failed':
+                fst['failures'] = 1;
+            else:
+                pass;
+            if stage == 'connect':
+                fs = 1;
+            elif stage == 'logout':
+                fs = 3;
+            else:
+                fs = 4;
+            fc = None;
+            if not os.path.exists(fp):
+                continue;
+            if not os.path.isfile(fp):
+                continue;
+            if not os.access(fp, os.R_OK):
+                continue;
+            with open(fp, 'r') as f:
+                fc = f.readlines();
+            r[fs].append('  <testsuite hostname="' + self.info['host'] + '" name="' + self.plugin_name + '.' + stage + '" ' + \
+                         'errors="' + str(fst['errors']) + '" skipped="' + str(fst['skipped']) + '" tests="' + str(fst['tests']) + '" failures="' + \
+                         str(fst['failures']) + '" time="0.00">');
+            if stage == 'connect':
+                r[fs].append('    <properties>');
+                for p in ['host', 'os']:
+                    r[fs].append('      <property name="' + p + '" value="' + str(self.info[p]) + '" />');
+                for p in ['output_dir', 'on_error', 'on_prompt']:
+                    r[fs].append('      <property name="' + p + '" value="' + str(self.conf[p]) + '" />');
+                r[fs].append('    </properties>');
+            r[fs].append('    <testcase name="' + stage  + '" time="0.00">');
+            if fc:
+                s = 'out';
+                if fst['failures'] > 0:
+                    s = 'err';
+                r[fs].append('      <system-' + s + '>');
+                r[fs].append('        <![CDATA[' + '\n'.join(fc) + ']]>');
+                r[fs].append('      </system-' + s + '>');
+            if fst['skipped'] > 0:
+                    r[fs].append('      <skipped />');
+            if fst['failures'] > 0:
+                    r[fs].append('      <failure />');
+            r[fs].append('    </testcase>');
+            r[fs].append('  </testsuite>');
+        '''
+        At this point, the tests are related to the execution of tasks.
+        '''
         j = {'errors': 0, 'skipped': 0, 'tests': 0, 'failures': 0};
         for _id in self.conf['cliset']:
             h = self.conf['cliset'][_id];
@@ -996,65 +1099,64 @@ class ActionModule(ActionBase):
                 if h['status'] == 'failed':
                     j['failures'] += 1;
                     continue;
-                if h['status'] == 'skipped':
+                elif h['status'] == 'ok':
+                    continue;
+                else:
                     j['skipped'] += 1;
                     continue;
-            if 'error_msg' in h:
+            if 'system_err' in h:
                 j['failures'] += 1;
                 continue;
         jtime = (self.conf['time_end'] - self.conf['time_start']) / 1000;
         jts = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(self.conf['time_start'] / 1000));
-        r.append('  <testsuite name="' + self.info['host'] + '" errors="' + str(j['errors']) + '" skipped="' + str(j['skipped']) + \
+        r[2].append('  <testsuite hostname="' + self.info['host'] + '" name="' + self.plugin_name + '.execute" errors="' + str(j['errors']) + '" skipped="' + str(j['skipped']) + \
                  '" tests="' + str(j['tests']) + '" failures="' + str(j['failures']) + '" time="' + str(jtime) + '" timestamp="' + jts + '">');
-        r.append('    <properties>');
-        for p in ['host', 'os']:
-            r.append('      <property name="' + p + '" value="' + str(self.info[p]) + '" />');
-        for p in ['output_dir', 'on_error', 'on_prompt']:
-            r.append('      <property name="' + p + '" value="' + str(self.conf[p]) + '" />');
-        r.append('    </properties>');
         for _id in self.conf['cliset']:
             h = self.conf['cliset'][_id];
+            m['cliset'][_id] = {};
+            for p in ['cli', 'allow_empty_response', 'mode', 'format', 'path', 'sha1', 'sha1_pre', 'source', 'tags', 'pre', 'post', 'saveas', 'lines', 'status']:
+                if p in h:
+                    m['cliset'][_id][p] = h[p];
             tc_name = h['cli'];
             if 'time_start' in h and 'time_end' in h:
                 tc_time = (h['time_end'] - h['time_start']) / 1000;
             else:
                 tc_time = '0';
-            r.append('    <testcase name="' + tc_name  + '" time="' + str(tc_time) + '">');
-            r.append('      <system-out>');
-            r.append('        <![CDATA[');
-            for p in ['mode', 'format', 'path', 'sha1', 'sha1_pre', 'source', 'tags', 'pre', 'post', 'saveas', 'lines']:
-                if p in h:
-                    #r.append('          ' + p + ': ' + str(h[p]));
-                    r.append(p + ': ' + str(h[p]));
-            r.append('        ]]>');
-            r.append('      </system-out>');
-            if 'error_msg' in h:
-                r.append('      <system-err>');
-                r.append('        <![CDATA[');
-                for p in h['error_msg']:
-                    if isinstance(p, str):
-                        r.append(p);
-                        #r.append('          ' + p);
-                    elif isinstance(p, list):
-                        for pi in p:
-                            r.append(pi);
-                            #r.append('          ' + pi);
-                    else:
-                        pass;
-                r.append('        ]]>');
-                r.append('      </system-err>');
+            r[2].append('    <testcase name="' + tc_name  + '" time="' + str(tc_time) + '">');
+            for s in ['out', 'err']:
+                if 'system_' + s in h:
+                    payload = h['system_' + s];
+                    if isinstance(payload, list):
+                        payload = '\n'.join(payload);
+                    r[2].append('      <system-' + s + '>');
+                    r[2].append('        <![CDATA[' + payload + ']]>');
+                    r[2].append('      </system-' + s + '>');
+                else:
+                    if s == 'out':
+                        r[2].append('      <system-' + s + ' />');
             if 'status' in h:
                 if h['status'] == 'failed':
-                    r.append('      <failure />');
-                elif h['status'] == 'skipped':
-                    r.append('      <skipped />');
-                else:
+                    r[2].append('      <failure />');
+                elif h['status'] == 'ok':
                     pass;
-            r.append('    </testcase>');
-        r.append('  </testsuite>');
-        r.append('</testsuites>');
+                else:
+                    r[2].append('      <skipped />');
+            r[2].append('    </testcase>');
+        r[2].append('  </testsuite>');
+        for s in ['temp_dir', 'output_dir', 'args', 'upid']:
+            if s in self.conf:
+                if s in ['args']:
+                    m[s] = ' '.join(self.conf[s]);
+                else:
+                    m[s] = str(self.conf[s]);
+        rr = [];
+        for i in r:
+            for j in r[i]:
+                rr.append(j);
         with open(os.path.join(self.conf['temp_dir'], self.info['host'] + '.junit.xml'), 'w') as f:
-            f.write('\n'.join(r));
+            f.write('\n'.join(rr));
+        with open(os.path.join(self.conf['temp_dir'], self.info['host'] + '.meta.yml'), 'w') as f:
+            yaml.safe_dump(m, f, default_flow_style=False, encoding='utf-8', allow_unicode=True);
         if self.conf['output_dir'] is not None:
             commit_dir = os.path.join(self.conf['output_dir'], self.info['host']);
             if not os.path.exists(commit_dir):
@@ -1064,7 +1166,9 @@ class ActionModule(ActionBase):
                     display.display('<' + self.info['host'] + '> ' + traceback.format_exc(), color='red');
                     return;
             with open(os.path.join(self.conf['output_dir'], self.info['host'], self.info['host'] + '.junit.xml'), 'w') as f:
-                f.write('\n'.join(r));
+                f.write('\n'.join(rr));
+            with open(os.path.join(self.conf['output_dir'], self.info['host'], self.info['host'] + '.meta.yml'), 'w') as f:
+                yaml.safe_dump(m, f, default_flow_style=False, encoding='utf-8', allow_unicode=True);
         return;
 
 
@@ -1073,6 +1177,8 @@ class ActionModule(ActionBase):
         This function writes the data collected during this run to
         output directory.
         '''
+        if 'output_dir' not in self.conf:
+            return;
         if self.conf['output_dir'] is None:
             return;
         commit_dir = os.path.join(self.conf['output_dir'], self.info['host']);
@@ -1090,6 +1196,9 @@ class ActionModule(ActionBase):
                 continue;
             if 'sha1' not in self.conf['cliset'][_id]:
                 continue;
+            if 'status' in self.conf['cliset'][_id]:
+                if self.conf['cliset'][_id]['status'] != 'ok':
+                    continue;
             fn = os.path.join(commit_dir, self.conf['cliset'][_id]['filename']);
             if 'sha1' in self.conf['cliset'][_id]:
                 if os.path.exists(fn):

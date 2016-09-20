@@ -63,8 +63,8 @@ Documentation
 -------------
 
 Please read the plugin's documentation for more information at `Read the
-Docs <http://ansible-plugin-clicap.readthedocs.io/en/latest/>`__ and
-review the plugin's
+Docs <http://ansible-plugin-clicap.readthedocs.io/>`__ and review the
+plugin's
 `Demo <https://github.com/greenpau/ansible-plugin-clicap/tree/master/demo/firewall>`__
 directory.
 

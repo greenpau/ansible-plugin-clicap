@@ -20,26 +20,35 @@ control and quality documentation.
 
 ## Getting Started
 
-First, a contributor must have a GitHub account.
+First, review and understand the following diagram:
 
-Next, fork this repository (thereafter **upsteam**) by clicking `Fork` button
-on the top-right of this page. The forked repository (thereafter **origin**)
-is located under your own account in Github.
+[![Plugin Workflow](https://raw.githubusercontent.com/greenpau/ansible-plugin-clicap/master/docs/_static/images/ansible.plugin.clicap.code.submission.workflow.png "Network Automation Workflow")](https://raw.githubusercontent.com/greenpau/ansible-plugin-clicap/master/docs/_static/images/ansible.plugin.clicap.code.submission.workflow.png)
 
-Then, make a local copy of the forked repository (thereafter **local**).
+The diagram describes [Git Forking Workflow](https://www.atlassian.com/git/tutorials/comparing-workflows/forking-workflow).
+That is the code management workflow for this repository.
+
+Next, a contributor must have a GitHub account.
+
+After that, the contributor forks this repository (thereafter **upsteam**) by
+clicking `Fork` button on the top-right of this page. The forked repository
+(thereafter **origin**) becomes a part of the contributor's Github account.
+
+Then, the contributor makes a local copy of the forked repository (thereafter
+**local**).
 
 ```
 mkdir -p ~/dev && cd ~/dev && \
  git clone git@github.com:CONTRIBUTOR_GITHUB_HANDLE/ansible-plugin-clicap.git
 ```
 
-Browse to the plugin's directory and create a reference to **upstream**:
+The contributor creates a reference to **upstream** on his or her localhost:
 
 ```
 git remote add upstream git@github.com:greenpau/ansible-plugin-clicap.git
 ```
 
-Thereafter, follow the Initial Github Commit and Pull Request guidance.
+Thereafter, the contributor follows the Initial Github Commit and Pull Request
+guidance.
 
 :arrow_up: [Back to top](#top)
 

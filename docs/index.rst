@@ -1,27 +1,30 @@
 .. index::
-   single: Table of Contents
+   single: Workflow Diagram
 
-==================================
-clicap - Network Automation Plugin
-==================================
+============
+Introduction
+============
 
-|CircleCI| |PyPI version| |Documentation Status|
+.. include:: localtoc.rst
 
-Table of Contents:
+The plugin collects (captures) command-line (cli) output from and
+interacts with network equipment.
 
-.. toctree::
-   :maxdepth: 3
+The intended audience of this plugin are system and network
+administrators and engineers.
 
-   intro
-   usage
-   auth
-   faqs
+The plugin *will* (in near future) work on both Windows and Linux
+operating systems.
 
-.. include:: intro.rst
+The plugin's data abstraction format is `YAML <http://yaml.org/>`__.
 
-.. |CircleCI| image:: https://circleci.com/gh/greenpau/ansible-plugin-clicap.svg?style=svg
-         :target: https://circleci.com/gh/greenpau/ansible-plugin-clicap
-.. |PyPi version| image:: https://badge.fury.io/py/ansible-plugin-clicap.png
-         :target: https://badge.fury.io/py/ansible-plugin-clicap
-.. |Documentation Status| image:: https://readthedocs.org/projects/ansible-plugin-clicap/badge/?version=latest
-         :target: http://ansible-plugin-clicap.readthedocs.io/
+The plugin requires the presence of two binaries: ``ssh`` and
+``expect``.
+
+Workflow Diagram
+----------------
+
+|Plugin Workflow|
+
+.. |Plugin Workflow| image:: _static/images/ansible.plugin.clicap.png
+            :target: _static/images/ansible.plugin.clicap.png

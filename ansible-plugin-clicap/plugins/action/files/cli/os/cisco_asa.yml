@@ -8,15 +8,31 @@ clicap:
 - cli: show arp
 - cli: show clock
 - cli: show ntp associations
+  conditions-match-any:
+  - '^ntp server'
 - cli: show ntp status
+  conditions-match-any:
+  - '^ntp server'
 - cli: show startup-config
 - cli: show interface
 - cli: show access-list
+  conditions-match-any:
+  - '^access-list'
 - cli: show ip address
 - cli: show module all
 - cli: show failover
+  conditions-match-any:
+  - '^failover lan unit'
+  - '^failover link'
+  - '^failover interface'
 - cli: show route
 - cli: show traffic
 - cli: show asp drop
 - cli: show wccp
+  conditions-match-any:
+  - '^wccp '
 - cli: show nat
+  conditions-match-any:
+  - '^global\s\('
+  - '^\s*nat\s\('
+  - '^static\s\('

@@ -9,5 +9,5 @@ clicap:
   cli: show
   post: |
     exit
-  saveas: '%H.config'
+  saveas: '%h.config'
   mode: analytics

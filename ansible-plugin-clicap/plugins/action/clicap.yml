@@ -64,7 +64,7 @@ output_errors:
   - "WARNING:"
   msg: "command resulting in warning"
 - regex:
-  - "ERROR"
+  - "ERROR:"
   msg: "command resulting in error"
 - regex:
   - "[Ss]yntax error"

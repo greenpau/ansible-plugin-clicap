@@ -9,7 +9,7 @@ import re;
 import stat;
 
 pkg_name = 'ansible-plugin-clicap';
-pkg_ver = '0.5';
+pkg_ver = '0.6';
 
 def _load_test_suite():
     test_loader = unittest.TestLoader();
@@ -50,15 +50,18 @@ class InstallAddons(install):
         '''
         Create a symlink, i.e. `ln -s TARGET LINK_NAME`
         '''
-        symlink_target = os.path.join(plugin_dir, 'clicap.py');
-        symlink_name = os.path.join(ansible_dir, 'plugins/action/clicap.py');
-        try:
-            if os.path.exists(symlink_name):
-                os.unlink(symlink_name);
-            os.symlink(symlink_target, symlink_name);
-            os.chmod(symlink_name, stat.S_IRUSR | stat.S_IWUSR);
-        except:
-            print('FAIL: an attempt to create a symlink failed');
+
+        for i in ['action', 'callback']:
+            symlink_target = os.path.join(plugin_dir, 'plugins/' + i + '/clicap.py');
+            symlink_name = os.path.join(ansible_dir, 'plugins/' + i + '/clicap.py');
+            try:
+                if os.path.exists(symlink_name):
+                    os.unlink(symlink_name);
+                os.symlink(symlink_target, symlink_name);
+                os.chmod(symlink_name, stat.S_IRUSR | stat.S_IWUSR);
+            except:
+                print('FAIL: an attempt to create a symlink for an ' + i + ' plugin failed');
+                return;
 
     @staticmethod
     def _find_utility(name):
@@ -90,7 +93,11 @@ pkg_requires = ['ansible>=2.0'];
 pkg_data=[
     '*.yml',
     '*.j2',
-    'files/cli/os/*.yml',
+    'plugins/callback/*.py',
+    'plugins/action/*.py',
+    'plugins/action/*.j2',
+    'plugins/action/*.yml',
+    'plugins/action/files/cli/os/*.yml',
     'README.rst',
 ];
 pkg_platforms='any';

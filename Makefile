@@ -3,7 +3,7 @@
 export USER
 PLUGIN_NAME="ansible-plugin-clicap"
 PLUGIN_NAME_EGG := $(subst -,_,$(PLUGIN_NAME))
-PLUGIN_VER=0.5
+PLUGIN_VER=0.6
 DOCKER_IMAGE_NAME="greenpau/ansible2"
 DOCKER_CONTAINER_NAME="ansible2"
 DOCKER_CONTAINER_SHELL="/bin/sh"
